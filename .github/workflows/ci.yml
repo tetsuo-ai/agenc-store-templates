@@ -1,0 +1,60 @@
+name: CI
+
+# AgenC store-templates CI (PLAN_2 Part C).
+#
+# Runs the package gate (typecheck + unit/structural tests + scaffold smoke
+# test) on every push/PR. The three Next template `next build`s run against the
+# committed local sandbox (the agenc-protocol localnet stack) in the
+# `template-build` job, which is gated on a sibling agenc-protocol checkout +
+# a booted validator — so it is guarded by a repository variable and skipped
+# when the sandbox is unavailable (e.g. on a fork without the protocol checkout).
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  packages:
+    name: Packages — typecheck + tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20.18"
+      # The AgenC packages are not yet on npm; CI installs the committed tarballs
+      # via the root `overrides`. `npm ci` requires the lockfile to be in sync.
+      - run: npm ci
+      - run: npm run typecheck --workspace=packages/store-core --workspace=packages/create-agenc-store
+      - run: npm test --workspace=packages/store-core --workspace=packages/create-agenc-store
+      - run: npm run build --workspace=packages/store-core --workspace=packages/create-agenc-store
+
+  template-build:
+    name: Templates — next build against the sandbox
+    runs-on: ubuntu-latest
+    # The template builds need the agenc-protocol localnet stack (a sibling
+    # checkout + a booted solana-test-validator with seeded listings). Enable by
+    # setting the repo variable RUN_TEMPLATE_BUILDS=true once the runner provides
+    # that stack; otherwise the package gate above is the enforced contract.
+    if: ${{ vars.RUN_TEMPLATE_BUILDS == 'true' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20.18"
+      - run: npm ci
+      # Boot the local sandbox (requires AGENC_PROTOCOL_DIR or a sibling
+      # ../agenc-protocol checkout with a built program + SDK).
+      - run: npm run sandbox:up
+      - name: Build all three templates
+        env:
+          AGENC_RPC_URL: http://127.0.0.1:8899
+        run: |
+          for t in marketplace-store provider-storefront vertical-store; do
+            echo "::group::next build $t"
+            ( cd "templates/$t" && npx next build )
+            echo "::endgroup::"
+          done
+      - run: npm run sandbox:down
+        if: always()

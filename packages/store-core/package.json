@@ -1,0 +1,98 @@
+{
+  "name": "@tetsuo-ai/store-core",
+  "version": "0.1.0",
+  "description": "Shared config schema, SEO helpers, page sections, and the local sandbox bootstrap consumed by every AgenC store template (PLAN_2 Part C).",
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      },
+      "require": {
+        "types": "./dist/index.d.cts",
+        "default": "./dist/index.cjs"
+      }
+    },
+    "./config": {
+      "import": {
+        "types": "./dist/config/index.d.ts",
+        "default": "./dist/config/index.js"
+      }
+    },
+    "./seo": {
+      "import": {
+        "types": "./dist/seo/index.d.ts",
+        "default": "./dist/seo/index.js"
+      }
+    },
+    "./sections": {
+      "import": {
+        "types": "./dist/sections/index.d.ts",
+        "default": "./dist/sections/index.js"
+      }
+    },
+    "./upgrade": {
+      "import": {
+        "types": "./dist/upgrade/index.d.ts",
+        "default": "./dist/upgrade/index.js"
+      }
+    },
+    "./sandbox-up": "./scripts/sandbox-up.mjs",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist",
+    "src",
+    "scripts",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "peerDependencies": {
+    "@solana/kit": "^6.9.0",
+    "@solana/program-client-core": "^6.4.0",
+    "@tetsuo-ai/marketplace-react": "^0.1.0",
+    "@tetsuo-ai/marketplace-sdk": "^0.3.0",
+    "react": ">=18"
+  },
+  "dependencies": {
+    "zod": "^3.24.1"
+  },
+  "devDependencies": {
+    "@solana/kit": "6.9.0",
+    "@solana/program-client-core": "^6.4.0",
+    "@tetsuo-ai/marketplace-react": "^0.1.0",
+    "@tetsuo-ai/marketplace-sdk": "^0.3.0",
+    "@types/react": "^18.3.12",
+    "react": "^18.3.1",
+    "tsup": "8.5.1",
+    "typescript": "5.9.3",
+    "vitest": "4.1.8"
+  },
+  "license": "MIT",
+  "publishConfig": {
+    "access": "public"
+  },
+  "engines": {
+    "node": ">=20.18.0"
+  },
+  "author": "Tetsuo AI",
+  "keywords": [
+    "agenc",
+    "solana",
+    "marketplace",
+    "store",
+    "template",
+    "nextjs",
+    "seo"
+  ]
+}

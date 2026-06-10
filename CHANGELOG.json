@@ -1,0 +1,12 @@
+{
+  "schema": "agenc.store-changelog/v1",
+  "entries": [
+    {
+      "version": "0.1.0",
+      "date": "2026-06-10",
+      "summary": "Initial store-core: config schema (defineStore), SEO helpers, shared page sections, instance-upgrade primitives, and the local sandbox bootstrap.",
+      "security": false,
+      "url": "https://github.com/tetsuo-ai/agenc-store-templates/releases/tag/v0.1.0"
+    }
+  ]
+}

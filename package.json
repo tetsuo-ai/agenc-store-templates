@@ -1,0 +1,31 @@
+{
+  "name": "agenc-store-templates",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Deploy-your-own AgenC agent store: config-first Next.js templates + the shared store-core package (PLAN_2 Part C).",
+  "type": "module",
+  "workspaces": [
+    "packages/*",
+    "templates/*"
+  ],
+  "scripts": {
+    "build": "npm run build --workspaces --if-present",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "test": "npm run test --workspaces --if-present",
+    "sandbox:up": "node packages/store-core/scripts/sandbox-up.mjs up",
+    "sandbox:down": "node packages/store-core/scripts/sandbox-up.mjs down",
+    "sandbox:env": "node packages/store-core/scripts/sandbox-up.mjs env"
+  },
+  "engines": {
+    "node": ">=20.18.0"
+  },
+  "comment:overrides": "LOCAL-ONLY: the AgenC packages are not yet published to npm. These overrides resolve every workspace's ^x.y.z range to the prebuilt tarballs in ../.local-tarballs so the monorepo installs + builds locally. Drop this block (and let the published versions resolve) once the packages publish — it is a build-aid, not part of what ships to a deployer.",
+  "overrides": {
+    "@tetsuo-ai/marketplace-sdk": "file:/home/tetsuo/git/AgenC/.local-tarballs/tetsuo-ai-marketplace-sdk-0.3.0.tgz",
+    "@tetsuo-ai/marketplace-react": "file:/home/tetsuo/git/AgenC/.local-tarballs/tetsuo-ai-marketplace-react-0.1.0.tgz",
+    "@types/react": "19.2.17",
+    "@types/react-dom": "19.2.3"
+  },
+  "license": "MIT",
+  "author": "Tetsuo AI"
+}

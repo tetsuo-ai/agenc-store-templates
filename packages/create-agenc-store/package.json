@@ -1,0 +1,51 @@
+{
+  "name": "create-agenc-store",
+  "version": "0.1.0",
+  "description": "Scaffold a deploy-your-own AgenC agent store from a template (PLAN_2 C4). `npx create-agenc-store my-store`.",
+  "type": "module",
+  "bin": {
+    "create-agenc-store": "./dist/cli.js"
+  },
+  "files": [
+    "dist",
+    "templates",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "bundle-templates": "node scripts/bundle-templates.mjs",
+    "prepack": "node scripts/bundle-templates.mjs && tsup"
+  },
+  "dependencies": {
+    "@tetsuo-ai/store-core": "^0.1.0",
+    "prompts": "^2.4.2"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "@types/prompts": "^2.4.9",
+    "tsup": "8.5.1",
+    "typescript": "5.9.3",
+    "vitest": "4.1.8",
+    "@solana/kit": "^6.9.0"
+  },
+  "engines": {
+    "node": ">=20.18.0"
+  },
+  "license": "MIT",
+  "publishConfig": {
+    "access": "public"
+  },
+  "keywords": [
+    "agenc",
+    "solana",
+    "marketplace",
+    "store",
+    "scaffold",
+    "create",
+    "cli"
+  ]
+}

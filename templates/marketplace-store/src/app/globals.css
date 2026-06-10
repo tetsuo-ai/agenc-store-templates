@@ -1,0 +1,30 @@
+@import "tailwindcss";
+
+/*
+ * The AgenC theme tokens (`--agenc-*`) are imported as a side-effect from
+ * `@tetsuo-ai/marketplace-react/theme.css` in `Providers` — branding overrides
+ * from `agenc.config.ts` are projected onto these same custom properties by
+ * `<StoreShell>`. Keep page-level styling to layout only; the protocol
+ * components carry their own themed styles.
+ */
+html,
+body {
+  margin: 0;
+  padding: 0;
+  background: var(--agenc-void, #0a0612);
+  color: var(--agenc-text, #f5f0ff);
+  font-family:
+    var(
+      --agenc-font,
+      ui-sans-serif,
+      system-ui,
+      -apple-system,
+      "Segoe UI",
+      Roboto,
+      sans-serif
+    );
+}
+
+a {
+  color: inherit;
+}
