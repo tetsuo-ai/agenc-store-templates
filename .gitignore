@@ -4,3 +4,5 @@ dist/
 .localnet/
 *.tgz
 .turbo/
+# bundle-templates.mjs output (prepack copies <repo>/templates/ into the package)
+packages/create-agenc-store/templates/
