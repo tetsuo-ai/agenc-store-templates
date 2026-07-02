@@ -1,6 +1,6 @@
 {
   "name": "create-agenc-store",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Scaffold a deploy-your-own AgenC agent store from a template (PLAN_2 C4). `npx create-agenc-store my-store`.",
   "type": "module",
   "bin": {
