@@ -1,7 +1,7 @@
 /**
  * Per-listing combined referral-fee pre-computation (PLAN_2 C2).
  *
- * The on-chain P6.2 settlement leg enforces a combined cap:
+ * The deployed on-chain settlement path enforces a combined cap:
  * `protocol + operator + referrer ≤ 4000 bps`. A store config validates the
  * referrer share ALONE at build time, but the protocol fee and a listing's
  * operator fee are only known at checkout. This module pre-computes the combined
@@ -9,12 +9,11 @@
  * transaction that would revert on-chain — never a silent drop, never a failed
  * broadcast.
  *
- * ## P6.2 gate
- *
  * This is pure arithmetic on disclosed fee rates; it does NOT inject a referrer
- * into a hire (that is gated by `marketplace-react`'s
- * `resolveReferrerCapability()`, not-live today). It exists so the disclosure +
- * checkout math is correct the moment P6.2 ships.
+ * into a hire — injection happens at the provider level in `marketplace-react`
+ * (`resolveReferrerCapability()` reports `live: true` whenever a validated
+ * referrer is configured; referral settlement has been live on-chain since
+ * 2026-06-11).
  *
  * @module config/referrer-fee
  */

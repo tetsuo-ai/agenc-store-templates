@@ -36,12 +36,12 @@ export interface ScaffoldOptions {
   /** Target cluster. */
   network: StoreNetwork;
   /**
-   * The deliberate Phase-9 mainnet opt-in. NEVER auto-set: pointing a store at
-   * real funds must be a conscious second step (`--allow-mainnet` /
+   * The deliberate real-funds mainnet opt-in. NEVER auto-set: pointing a store
+   * at real funds must be a conscious second step (`--allow-mainnet` /
    * interactive confirm), not a side effect of choosing `--network mainnet`.
    */
   allowMainnet?: boolean;
-  /** Referrer wallet (base58) — the owner earns on every hire (P6.2 gated). */
+  /** Referrer wallet (base58) — the owner earns on every hire. */
   referrerWallet: string;
   /** Referral fee in basis points. */
   referrerFeeBps: number;
@@ -120,7 +120,7 @@ export function validateOptions(opts: ScaffoldOptions): string | null {
     description: opts.description,
     network: opts.network,
     // NEVER auto-set allowMainnet. It is forwarded ONLY when the human made the
-    // deliberate Phase-9 opt-in (--allow-mainnet / interactive confirm); a bare
+    // deliberate real-funds opt-in (--allow-mainnet / interactive confirm); a bare
     // `--network mainnet` leaves it unset, so safeDefineStore's superRefine
     // rejects it here — BEFORE any files are written — exactly as a deployer's
     // build would. This keeps the two-step "never point at real funds by

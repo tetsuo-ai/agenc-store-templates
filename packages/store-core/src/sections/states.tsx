@@ -2,8 +2,9 @@
  * The specced empty / error states (PLAN_2 C3). Each store surface has a
  * DESIGNED state, not an improvised one:
  *
- * - {@link SurfaceNotDeployedSection} — the C2 surface-check page (mainnet
- *   pre-Phase-9, no listings, or indexer-unreachable).
+ * - {@link SurfaceNotDeployedSection} — the C2 surface-check page (a mainnet
+ *   config missing its `allowMainnet` opt-in, no listings, or
+ *   indexer-unreachable).
  * - {@link EmptyCatalogSection} — "no listings" on devnet/localnet, with the
  *   seeded-fixture hint.
  * - {@link ZeroMatchSection} — curation filters matched nothing.

@@ -12,12 +12,11 @@ deployed — keyed to **their own referrer wallet**.
 
 Target: **< 15 minutes** on a clean machine.
 
-> **Gated on P6.2.** PLAN_2 §0: the headline "first *referral-fee-bearing* hire"
-> form of this metric is **blocked on P6.2** (referral settlement is not live, so
-> no hire bears a referral fee yet). Until P6.2 ships, measure the proxy:
-> **first sandbox hire confirmed through the deployer's own store** (the referral
-> wallet is configured + disclosed, just not yet charged). Record the proxy
-> result and mark the fee-bearing form as P6.2-blocked.
+> **Fee-bearing form is measurable.** Referral settlement is live on-chain, so
+> the headline metric is the real thing: the deployer's first hire through
+> their own store BEARS their referral fee (injected at the provider level and
+> settled atomically). On localnet, the sandbox settles the same instruction
+> surface as mainnet.
 
 ## Protocol
 
@@ -43,8 +42,8 @@ Target: **< 15 minutes** on a clean machine.
 |------|--------------------|---------|---------|--------|-------|
 | _TBD_ | _TBD_ | _TBD_ | localnet/devnet | _not measured_ | [HUMAN] run pending |
 
-The fee-bearing variant of this metric stays **BLOCKED-ON-P6.2** and must not be
-reported as measured until referral settlement is live on the target cluster.
+The fee-bearing variant of this metric is UNBLOCKED (referral settlement is
+live); it still must not be reported as measured until the [HUMAN] run happens.
 
 ## What "good" looks like
 

@@ -123,8 +123,9 @@ Options:
   -t, --template <variant>   marketplace-store | provider-storefront | vertical-store
       --name <string>        store display name
       --description <string> store description (SEO/OG/llms.txt)
-      --network <cluster>    localnet (default) | devnet | mainnet
-      --referrer <base58>    referrer wallet (earns on every hire; P6.2 gated)
+      --network <cluster>    localnet (default) | devnet | mainnet (REAL funds)
+      --referrer <base58>    referrer wallet (earns on every hire — referral
+                             settlement is live on-chain)
       --fee-bps <int>        referral fee in basis points (default 250)
       --api-base-url <url>   hosted indexer base URL (default: per-network RPC)
       --site-url <url>       canonical site URL (default http://localhost:3000)
@@ -132,7 +133,8 @@ Options:
       --category <token>     [vertical-store] the single category (e.g. code-generation)
       --no-powered-by        hide the PoweredBy footer (also the referral disclosure)
       --allow-mainnet        REQUIRED to scaffold a mainnet store — the deliberate
-                             Phase-9 opt-in that points the store at REAL funds
+                             opt-in that points the store at REAL funds (walk the
+                             docs/GO_LIVE.md checklist first)
   -y, --yes                  non-interactive; use defaults for anything unspecified
   -h, --help                 show this help
 
@@ -222,7 +224,7 @@ async function resolveOptions(flags: Flags): Promise<ScaffoldOptions | null> {
       choices: [
         { title: "localnet (local sandbox)", value: "localnet" },
         { title: "devnet", value: "devnet" },
-        { title: "mainnet (gated until Phase 9)", value: "mainnet" },
+        { title: "mainnet (REAL funds — requires the explicit opt-in)", value: "mainnet" },
       ],
       initial: 0,
     });
@@ -234,11 +236,11 @@ async function resolveOptions(flags: Flags): Promise<ScaffoldOptions | null> {
     return null;
   }
 
-  // Mainnet points the store at REAL funds and is Phase-9-gated. Choosing the
-  // network is NOT enough — the deployer must make a deliberate second opt-in.
-  // We NEVER auto-set allowMainnet (that silently collapses the two-step money
-  // gate); require an explicit --allow-mainnet flag or an interactive confirm,
-  // and otherwise refuse before any filesystem work.
+  // Mainnet points the store at REAL funds. Choosing the network is NOT
+  // enough — the deployer must make a deliberate second opt-in. We NEVER
+  // auto-set allowMainnet (that silently collapses the two-step money gate);
+  // require an explicit --allow-mainnet flag or an interactive confirm, and
+  // otherwise refuse before any filesystem work.
   let allowMainnet = false;
   if (network === "mainnet") {
     if (flags.allowMainnet) {
@@ -248,7 +250,7 @@ async function resolveOptions(flags: Flags): Promise<ScaffoldOptions | null> {
         type: "confirm",
         name: "allowMainnet",
         message:
-          "mainnet points this store at REAL funds (Phase-9 gated). Opt in?",
+          "mainnet points this store at REAL funds. Opt in deliberately?",
         initial: false,
       });
       allowMainnet = r.allowMainnet === true;
@@ -256,10 +258,10 @@ async function resolveOptions(flags: Flags): Promise<ScaffoldOptions | null> {
     if (!allowMainnet) {
       process.stderr.write(
         "Refusing to scaffold a mainnet store without an explicit opt-in.\n" +
-          "mainnet is Phase-9-gated and points at REAL funds. Re-run with " +
-          "--allow-mainnet (or confirm interactively) to deliberately opt in, " +
-          "or hand-add `allowMainnet: true` to the generated agenc.config.ts " +
-          "yourself.\n",
+          "mainnet points at REAL funds. Re-run with --allow-mainnet (or " +
+          "confirm interactively) to deliberately opt in — and walk the " +
+          "go-live checklist (docs/GO_LIVE.md) first — or hand-add " +
+          "`allowMainnet: true` to the generated agenc.config.ts yourself.\n",
       );
       return null;
     }
@@ -366,8 +368,9 @@ export async function main(argv: string[]): Promise<number> {
             "  #   npm run sandbox:up\n"
           : "") +
         "  npm run dev\n\n" +
-        "Edit agenc.config.ts to customize. The referral fee is validated + " +
-        "disclosed but not injected until protocol P6.2 ships.\n",
+        "Edit agenc.config.ts to customize. The referral fee is validated, " +
+        "disclosed, and injected into every hire — referral settlement is " +
+        "live on-chain.\n",
     );
     return 0;
   } catch (err) {

@@ -56,16 +56,12 @@ function variantHeader(variant: TemplateVariant): string {
  * @returns The file contents.
  */
 export function renderAgencConfig(opts: ScaffoldOptions): string {
-  // Only emit allowMainnet when the human made the deliberate Phase-9 opt-in.
-  // Never derive it from `network === "mainnet"` alone — that would re-introduce
-  // the silent gate bypass (a generated real-funds store the deployer never
-  // consciously opted into).
-  // Only emit allowMainnet when the human made the deliberate Phase-9 opt-in.
-  // Never derive it from `network === "mainnet"` alone — that would re-introduce
-  // the silent gate bypass (a generated real-funds store the deployer never
-  // consciously opted into).
+  // Only emit allowMainnet when the human made the deliberate real-funds
+  // opt-in. Never derive it from `network === "mainnet"` alone — that would
+  // re-introduce the silent gate bypass (a generated real-funds store the
+  // deployer never consciously opted into).
   const mainnetLine = opts.allowMainnet
-    ? "\n  allowMainnet: true, // Phase-9 mainnet opt-in (you passed --allow-mainnet)\n"
+    ? "\n  allowMainnet: true, // real-funds mainnet opt-in (you passed --allow-mainnet)\n"
     : "";
 
   return `/**
@@ -92,9 +88,9 @@ ${mainnetLine}  network: ${s(opts.network)},
     // apiKey: process.env.AGENC_API_KEY,
   },
 
-  // EVERY hire pays this referral wallet — once the P6.2 settlement leg is live
-  // on-chain (it is not yet). Until then the fee is validated, stored, and
-  // DISCLOSED on /trust + checkout, but never injected or fabricated.
+  // EVERY hire pays this referral wallet — referral settlement is live
+  // on-chain; the fee is validated at build time, injected into each hire
+  // automatically, and disclosed on /trust + checkout.
   referrer: {
     wallet: ${s(opts.referrerWallet)},
     feeBps: ${opts.referrerFeeBps}, // shares the protocol+operator+referrer <= 4000 bps cap

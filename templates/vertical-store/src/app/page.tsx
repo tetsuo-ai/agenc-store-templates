@@ -27,7 +27,7 @@ export default async function CatalogPage() {
       />
       {surface.deployed ? (
         <Catalog network={storeConfig.network} curation={storeConfig.curation} />
-      ) : surface.reason === "mainnet-not-launched" ? (
+      ) : surface.reason === "mainnet-not-enabled" ? (
         <SurfaceNotDeployedSection surface={surface} />
       ) : (
         // devnet/localnet with no live listings: render the client catalog so

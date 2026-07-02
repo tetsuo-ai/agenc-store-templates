@@ -42,19 +42,29 @@ a dependency bump + redeploy, never a template-code merge (PLAN_2 C7).
 - [`@tetsuo-ai/marketplace-sdk`](https://www.npmjs.com/package/@tetsuo-ai/marketplace-sdk)
   indexer client (via the react peer)
 
-## The referrer fee gate (P6.2)
+## The referrer fee
 
 Every store carries a `referrer: { wallet, feeBps }` so the owner earns on every
-hire. The on-chain referrer settlement leg (PLAN.md **P6.2**) is **not deployed
-yet**. So `store-core`:
+hire. Referral settlement is **live on-chain** (deployed 2026-06-11 with the
+full instruction surface). `store-core` + `marketplace-react`:
 
-- **validates** the referrer wallet (base58) and `feeBps` (range + the combined
+- **validate** the referrer wallet (base58) and `feeBps` (range + the combined
   `protocol + operator + referrer ≤ 4000 bps` cap) — a wrong wallet **fails the
   build** so fees never silently drop;
-- **stores + discloses** the config ("this site earns a referral fee, pending
-  protocol support");
-- **never injects** a referrer arg and **never fabricates** earnings. The
-  `/earnings` page renders the not-live state until P6.2 ships.
+- **inject** the referrer into every hire automatically at the provider level
+  and **disclose** it on `/trust` + checkout;
+- read `/earnings` from chain (aggregation via the hosted indexer) — totals are
+  never fabricated.
+
+## Hire → activation (WP-B1)
+
+A hire mints a Task that workers cannot claim until its job spec is pinned
+on-chain (`set_task_job_spec`) behind a CLEAN task-moderation attestation. The
+templates chain that automatically: `useHumanlessHireFlow` → the store's own
+`/api/agenc/activate-job-spec` route (hosts the canonical job-spec JSON, gets
+the marketplace-managed attestation — **zero moderation configuration**) → the
+buyer signs the activation. Operators running their own attestor may set the
+optional sovereignty field `moderation.attestorEndpoint`.
 
 ## Quick start (local)
 
@@ -83,9 +93,12 @@ lives in the versioned packages, so an instance update is a dep bump + redeploy)
 | [`vertical-store`](templates/vertical-store) | One curated category (the D3 verticals launch on this) |
 
 Each ships: `/` (catalog), `/listings/[pda]` (SSR + schema.org JSON-LD + OG — the
-per-store SEO surface), `/dashboard` (buyer tasks), `/earnings` (owner page,
-P6.2 not-live state), `/providers/[pda]`, `/trust`, plus
-`sitemap.xml`/`robots.txt`/`llms.txt` + per-listing AgentCard JSON — with
+per-store SEO surface, with the hire→activation flow), `/dashboard` (buyer
+tasks), `/earnings` (owner page, on-chain referral earnings),
+`/providers/[pda]`, `/trust`, the post-hire activation routes
+(`/api/agenc/activate-job-spec`, `/api/agenc/job-specs/[hash]`), plus
+`sitemap.xml`/`robots.txt`/`llms.txt` + per-listing AgentCard JSON
+(`agenc.agentCard.v1`, unified with agenc.ag) — with
 `agenc.config.ts`, `.env.example`, a README with one-click Vercel/Netlify deploy
 buttons + the [upgrade path](docs/UPGRADE.md), and the C7 staleness banner.
 
@@ -107,6 +120,7 @@ cd templates/marketplace-store && AGENC_RPC_URL=http://127.0.0.1:8899 npx next b
 
 ## Docs
 
+- [docs/GO_LIVE.md](docs/GO_LIVE.md) — the real-funds mainnet checklist behind `allowMainnet: true`
 - [docs/ACCEPTABLE_USE.md](docs/ACCEPTABLE_USE.md) — AUP + API-key revocation takedown lever
 - [docs/UPGRADE.md](docs/UPGRADE.md) — the C7 instance-upgrade story
 - [docs/DOGFOOD.md](docs/DOGFOOD.md) — the storefront as a `marketplace-store` instance

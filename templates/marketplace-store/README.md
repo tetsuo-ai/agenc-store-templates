@@ -32,34 +32,37 @@ npm run dev
 ```
 
 The default `agenc.config.ts` targets **localnet** (the local sandbox). Switch
-`network` to `"devnet"` for a public devnet store. `"mainnet"` is gated until
-Phase 9 and additionally requires `allowMainnet: true`.
+`network` to `"devnet"` for a public devnet store. `"mainnet"` points the store
+at REAL funds and additionally requires the explicit `allowMainnet: true`
+opt-in — walk the go-live checklist
+([`docs/GO_LIVE.md`](../../docs/GO_LIVE.md)) first.
 
 ## What you get
 
 | Route | What it is |
 |---|---|
 | `/` | Catalog: grid + category filters + search (indexer-backed, SSR + store JSON-LD) |
-| `/listings/[pda]` | Listing detail — **the per-store SEO surface**: SSR + schema.org `Service`/`Offer` JSON-LD + OG, provider track record, moderation badge, `HireButton` |
+| `/listings/[pda]` | Listing detail — **the per-store SEO surface**: SSR + schema.org `Service`/`Offer` JSON-LD + OG, provider track record, moderation badge, and the hire→activation flow (hire + automatic `set_task_job_spec`, so hired tasks are claimable) |
 | `/dashboard` | Buyer's tasks: status timeline, review (accept/reject), dispute state — wallet-gated, client-side |
-| `/earnings` | **Owner page** (readonly): referral earnings keyed to `referrer.wallet`. P6.2 not-live state today |
+| `/earnings` | **Owner page** (readonly): on-chain referral earnings keyed to `referrer.wallet` (aggregation reads through the indexer) |
 | `/providers/[pda]` | Provider profile + track record |
 | `/trust` | Buyer protections + the fee disclosure (incl. this store's referral bps + wallet) |
 | `/sitemap.xml`, `/robots.txt`, `/llms.txt` | Search + agent-crawler discovery |
-| `/api/agent-card/[pda]` | Per-listing machine-readable AgentCard JSON |
+| `/api/agent-card/[pda]` | Per-listing machine-readable AgentCard JSON (`agenc.agentCard.v1`, unified with agenc.ag) |
+| `/api/agenc/activate-job-spec`, `/api/agenc/job-specs/[hash]` | Post-hire activation: hosts + attests the job spec so the buyer can pin it on-chain (zero moderation config — marketplace-managed attestation) |
 
-## The referrer fee (P6.2 gate)
+## The referrer fee
 
-`agenc.config.ts -> referrer: { wallet, feeBps }` makes **every hire pay you**.
-The on-chain settlement leg (PLAN.md **P6.2**) is **not deployed yet**, so:
+`agenc.config.ts -> referrer: { wallet, feeBps }` makes **every hire pay you** —
+referral settlement is **live on-chain** (since 2026-06-11):
 
 - the wallet (base58) + `feeBps` (combined `protocol + operator + referrer ≤ 4000
   bps` cap) are **validated at build time** — a wrong wallet fails the build so
   fees never silently drop;
-- the fee is **stored + disclosed** on `/trust` + checkout;
-- it is **never injected** and earnings are **never fabricated**. `/earnings`
-  renders the not-live state until P6.2 ships, at which point it flips on with no
-  code change.
+- the fee is **injected into every hire automatically** at the provider level
+  and **disclosed** on `/trust` + checkout;
+- `/earnings` reads the on-chain per-hire earnings (aggregation via the hosted
+  indexer) — totals are read from chain, never fabricated.
 
 ## Upgrade path (your deploy is a fork no bot updates)
 

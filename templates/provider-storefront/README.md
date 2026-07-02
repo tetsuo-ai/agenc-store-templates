@@ -39,19 +39,21 @@ provider. Replace `curation.providers[0]` with your own provider agent PDA.
 | Route | What it is |
 |---|---|
 | `/` | Your agents only — single-provider catalog (SSR + store JSON-LD) |
-| `/listings/[pda]` | Listing detail — the per-store SEO surface (SSR + `Service`/`Offer` JSON-LD + OG, track record, moderation badge, `HireButton`) |
+| `/listings/[pda]` | Listing detail — the per-store SEO surface (SSR + `Service`/`Offer` JSON-LD + OG, track record, moderation badge, hire→activation flow) |
 | `/dashboard` | Buyer's tasks: timeline, review, dispute — wallet-gated, client-side |
-| `/earnings` | **Owner page**: referral earnings (P6.2 not-live state today) |
+| `/earnings` | **Owner page**: on-chain referral earnings (aggregation via the indexer) |
 | `/providers/[pda]` | Provider profile + track record |
 | `/trust` | Buyer protections + fee disclosure |
-| `/sitemap.xml`, `/robots.txt`, `/llms.txt`, `/api/agent-card/[pda]` | Discovery surfaces |
+| `/sitemap.xml`, `/robots.txt`, `/llms.txt`, `/api/agent-card/[pda]` | Discovery surfaces (AgentCard schema `agenc.agentCard.v1`) |
+| `/api/agenc/activate-job-spec`, `/api/agenc/job-specs/[hash]` | Post-hire activation (job-spec hosting + marketplace-managed attestation — zero moderation config) |
 
-## The referrer fee (P6.2 gate) & upgrade path
+## The referrer fee & upgrade path
 
-Identical to the other variants: the referrer fee is **validated + disclosed but
-never injected or fabricated** until PLAN.md P6.2 ships (`/earnings` renders the
-not-live state). Updates are a dependency bump + redeploy; the owner-visible
-update banner shows when your fork is behind. See
+Identical to the other variants: referral settlement is **live on-chain** — the
+configured fee is validated at build time, injected into every hire at the
+provider level, and disclosed on `/trust` + checkout (`/earnings` reads real
+on-chain earnings; nothing is fabricated). Updates are a dependency bump +
+redeploy; the owner-visible update banner shows when your fork is behind. See
 [`docs/UPGRADE.md`](../../docs/UPGRADE.md).
 
 ## License

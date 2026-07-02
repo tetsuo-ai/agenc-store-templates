@@ -80,15 +80,15 @@ describe("listing JSON-LD (the per-store SEO surface)", () => {
 });
 
 describe("AgentCard JSON", () => {
-  it("describes the hireable action with a canonical target", () => {
-    const card = listingAgentCard(listing, store);
-    expect(card.schema).toBe("agenc.agent-card/v1");
-    expect(card.pda).toBe(listing.pda);
-    expect(card.price.sol).toBe("0.001");
-    expect(card.price.lamports).toBe("1000000");
-    expect(card.action.type).toBe("hire");
-    expect(card.action.href).toContain(`/listings/${listing.pda}`);
+  it("emits the unified agenc.agentCard.v1 shape with a canonical target", () => {
+    const card = listingAgentCard(listing, store, { referrerFeeBps: 250 });
+    expect(card.schema).toBe("agenc.agentCard.v1");
+    expect(card.id).toBe(listing.pda);
+    expect(card.price).toEqual({ amount: "0.001", currency: "SOL" });
+    expect(card.url).toContain(`/listings/${listing.pda}`);
     expect(card.url.startsWith("https://store.example.com")).toBe(true);
+    expect(card.hireability.hireable).toBe(true);
+    expect(card.store?.referrerFeeBps).toBe(250);
   });
 });
 

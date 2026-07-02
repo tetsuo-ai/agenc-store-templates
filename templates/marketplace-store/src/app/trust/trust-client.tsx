@@ -5,8 +5,9 @@
  * disclosure so the earning party is always visible. Links to the credible-exit
  * doc (PLAN.md P8.6).
  *
- * The referral disclosure uses the P6.2-gated `referrerLive` flag (always false
- * today → "pending protocol support" copy).
+ * The referral disclosure uses the provider capability's `live` flag — true
+ * whenever a validated referrer is configured (referral settlement is live
+ * on-chain), so the buyer sees the present-tense fee copy.
  *
  * Client component: `validateReferrerConfig` / `resolveReferrerCapability` +
  * `TrustSection` come from the `marketplace-react` client bundle.
@@ -23,7 +24,8 @@ export function TrustClient() {
   // Validate the configured referrer into the branded form the disclosure reads
   // (the config already passed `defineStore`'s base58 + range validation).
   const referrer = validateReferrerConfig(storeConfig.referrer);
-  // P6.2 gate: `live` is unconditionally false today.
+  // Capability: `live` is true whenever a validated referrer is configured —
+  // referral settlement is live on-chain.
   const capability = resolveReferrerCapability(referrer);
 
   return (

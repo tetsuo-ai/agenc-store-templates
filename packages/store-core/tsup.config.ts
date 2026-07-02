@@ -15,6 +15,8 @@ export default defineConfig({
     "seo/index": "src/seo/index.ts",
     "sections/index": "src/sections/index.ts",
     "upgrade/index": "src/upgrade/index.ts",
+    "activation/index": "src/activation/index.ts",
+    "activation/server": "src/activation/server.ts",
   },
   format: ["esm", "cjs"],
   dts: true,

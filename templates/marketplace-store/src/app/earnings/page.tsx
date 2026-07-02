@@ -3,8 +3,9 @@
  * configured `referrer.wallet`. Runtime-only (the earnings read is a live hook),
  * so this server shell sets `dynamic` and renders the client body.
  *
- * THE P6.2 GATE: the on-chain referrer settlement leg is not deployed, so the
- * client body renders the documented NOT-LIVE state and never fabricates a total.
+ * Referral settlement is live on-chain; the client body reads earnings through
+ * the indexer and renders an honest reason (never a fabricated total) when
+ * that read surface is unavailable.
  */
 import { EarningsClient } from "./earnings-client";
 

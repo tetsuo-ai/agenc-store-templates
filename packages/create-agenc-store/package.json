@@ -21,7 +21,7 @@
     "prepack": "node scripts/bundle-templates.mjs && tsup"
   },
   "dependencies": {
-    "@tetsuo-ai/store-core": "^0.1.0",
+    "@tetsuo-ai/store-core": "^0.2.0",
     "prompts": "^2.4.2"
   },
   "devDependencies": {
@@ -30,7 +30,8 @@
     "tsup": "8.5.1",
     "typescript": "5.9.3",
     "vitest": "4.1.8",
-    "@solana/kit": "^6.9.0"
+    "@solana/kit": "^6.9.0",
+    "@tetsuo-ai/marketplace-sdk": "^0.6.1"
   },
   "engines": {
     "node": ">=20.18.0"

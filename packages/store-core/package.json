@@ -1,6 +1,6 @@
 {
   "name": "@tetsuo-ai/store-core",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Shared config schema, SEO helpers, page sections, and the local sandbox bootstrap consumed by every AgenC store template (PLAN_2 Part C).",
   "type": "module",
   "main": "./dist/index.cjs",
@@ -41,6 +41,18 @@
         "default": "./dist/upgrade/index.js"
       }
     },
+    "./activation": {
+      "import": {
+        "types": "./dist/activation/index.d.ts",
+        "default": "./dist/activation/index.js"
+      }
+    },
+    "./activation/server": {
+      "import": {
+        "types": "./dist/activation/server.d.ts",
+        "default": "./dist/activation/server.js"
+      }
+    },
     "./sandbox-up": "./scripts/sandbox-up.mjs",
     "./package.json": "./package.json"
   },
@@ -60,19 +72,20 @@
   "peerDependencies": {
     "@solana/kit": "^6.9.0",
     "@solana/program-client-core": "^6.4.0",
-    "@tetsuo-ai/marketplace-react": "^0.1.0",
-    "@tetsuo-ai/marketplace-sdk": "^0.3.0",
+    "@tetsuo-ai/marketplace-react": "^0.2.0",
+    "@tetsuo-ai/marketplace-sdk": "^0.6.1",
     "react": ">=18"
   },
   "dependencies": {
     "zod": "^3.24.1"
   },
   "devDependencies": {
-    "@solana/kit": "6.9.0",
+    "@solana/kit": "^6.9.0",
     "@solana/program-client-core": "^6.4.0",
-    "@tetsuo-ai/marketplace-react": "^0.1.0",
-    "@tetsuo-ai/marketplace-sdk": "^0.3.0",
+    "@tetsuo-ai/marketplace-react": "^0.2.0",
+    "@tetsuo-ai/marketplace-sdk": "^0.6.1",
     "@types/react": "^18.3.12",
+    "litesvm": "^1.1.0",
     "react": "^18.3.1",
     "tsup": "8.5.1",
     "typescript": "5.9.3",

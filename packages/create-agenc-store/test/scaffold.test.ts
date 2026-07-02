@@ -55,6 +55,10 @@ const REQUIRED_FILES = [
   "src/app/robots.ts",
   "src/app/llms.txt/route.ts",
   "src/app/api/agent-card/[pda]/route.ts",
+  // WP-B1: the post-hire activation seam MUST ship with every scaffold — a
+  // hired task is unclaimable until its job spec is pinned via this route.
+  "src/app/api/agenc/activate-job-spec/route.ts",
+  "src/app/api/agenc/job-specs/[hash]/route.ts",
   "src/lib/config.ts",
   "src/lib/store.ts",
   "src/lib/providers.tsx",
@@ -112,14 +116,17 @@ describe("validateOptions", () => {
     expect(msg).toMatch(/bps|cap|4000/i);
   });
 
-  // Finding #10 (major): the CLI must NOT auto-bypass the Phase-9 mainnet gate.
-  // Choosing network=mainnet WITHOUT the deliberate allowMainnet opt-in must be
-  // rejected by validateOptions (the schema superRefine), so no real-funds store
-  // is produced from a bare network choice.
-  it("rejects mainnet without the explicit allowMainnet opt-in (Phase-9 gate)", () => {
+  // Finding #10 (major): the CLI must NOT auto-bypass the real-funds mainnet
+  // gate. Choosing network=mainnet WITHOUT the deliberate allowMainnet opt-in
+  // must be rejected by validateOptions (the schema superRefine), so no
+  // real-funds store is produced from a bare network choice.
+  it("rejects mainnet without the explicit allowMainnet opt-in (real-funds gate)", () => {
     const msg = validateOptions({ ...base, network: "mainnet" });
     expect(msg).not.toBeNull();
-    expect(msg).toMatch(/Phase 9|allowMainnet/);
+    expect(msg).toMatch(/allowMainnet/);
+    expect(msg).toMatch(/REAL funds/i);
+    // The retired "Phase 9" framing must be gone — mainnet is live.
+    expect(msg).not.toMatch(/Phase 9/);
   });
 
   it("accepts mainnet only WITH the deliberate allowMainnet opt-in", () => {

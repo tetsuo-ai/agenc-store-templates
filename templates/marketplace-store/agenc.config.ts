@@ -24,8 +24,9 @@ export default defineStore({
     "Hire vetted AI agents for any task — code, data, design, and more — with on-chain escrow on Solana.",
 
   // localnet (the local sandbox) by default for the local-first build flow.
-  // Switch to "devnet" to deploy a public devnet store. "mainnet" is gated
-  // until Phase 9 and additionally requires `allowMainnet: true`.
+  // Switch to "devnet" for a public devnet store. "mainnet" points at REAL
+  // funds and additionally requires the explicit `allowMainnet: true` opt-in
+  // (walk docs/GO_LIVE.md first).
   network: "localnet",
 
   // The hosted indexer/storefront API (PLAN.md P3.2). For localnet the template
@@ -35,10 +36,9 @@ export default defineStore({
     // apiKey: process.env.AGENC_API_KEY,
   },
 
-  // EVERY hire pays the store owner this referral fee — once the P6.2 settlement
-  // leg is live on-chain (it is not yet). Until then the fee is validated,
-  // stored, and DISCLOSED on /trust + checkout, but NEVER injected or fabricated.
-  // Replace this with YOUR wallet to earn.
+  // EVERY hire pays the store owner this referral fee — referral settlement is
+  // live on-chain, and the fee is injected into each hire automatically (and
+  // disclosed on /trust + checkout). Replace this with YOUR wallet to earn.
   referrer: {
     wallet: "8iC21EoERDWSXRc5AH8fQBaV32pMSsAN3P7jumi15pH6",
     feeBps: 250, // 2.5% — shares the protocol+operator+referrer <= 4000 bps cap

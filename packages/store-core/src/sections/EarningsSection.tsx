@@ -2,14 +2,13 @@
  * `<EarningsSection>` — the store OWNER's `/earnings` page (PLAN_2 C3). Readonly,
  * keyed to the configured `referrer.wallet`, backed by `useReferrerEarnings`.
  *
- * ## THE P6.2 GATE (PLAN_2 §0, MANDATORY)
- *
- * The on-chain referrer settlement leg is NOT deployed. `useReferrerEarnings`
- * returns the documented not-live zero state today and this section RENDERS that
- * state honestly ("referral earnings are not live yet — pending protocol
- * support"). It NEVER fabricates a total and NEVER implies fees have been
- * collected. When P6.2 ships, only the hook's capability flag flips — this
- * component's per-hire table renders the real data with no surface change.
+ * Referral settlement is LIVE on-chain (since 2026-06-11): every hire under
+ * this store pays the configured referrer wallet its fee atomically at
+ * settlement. The hook reads the aggregated per-hire earnings through the
+ * indexer; when that read surface is unavailable (`live: false`, e.g. a bare
+ * gPA read path with no indexer) this section renders the hook's honest
+ * reason instead of fabricating a total — earnings are read from chain,
+ * never invented.
  *
  * Client component (`"use client"`): it uses hooks.
  *
@@ -25,14 +24,15 @@ import { lamportsToSol } from "../seo/url.js";
 export interface EarningsSectionProps {
   /** The store owner's referrer wallet (from `config.referrer.wallet`). */
   referrerWallet: string;
-  /** The configured referral fee in bps (shown alongside the not-live notice). */
+  /** The configured referral fee in bps (shown in the header). */
   feeBps: number;
   /** Emit no theme classes (white-label). */
   unstyled?: boolean;
 }
 
 /**
- * The owner earnings view. Honest about the P6.2 gate.
+ * The owner earnings view. Reads on-chain referral earnings; renders the
+ * hook's honest reason when the earnings read surface is unavailable.
  *
  * @param props - {@link EarningsSectionProps}.
  */
@@ -68,12 +68,14 @@ export function EarningsSection({
       </header>
 
       {!live ? (
-        // THE P6.2 NOT-LIVE STATE. Rendered honestly — no fabricated total.
+        // The earnings READ surface is unavailable (e.g. no indexer on this
+        // read path). Rendered honestly — no fabricated total. Settlement
+        // itself is on-chain regardless of this read.
         <StateMessage
           kind="empty"
           message={
             reason ??
-            "Referral earnings are not live yet — pending protocol support (P6.2)."
+            "Referral earnings can't be read on this connection yet — configure the hosted indexer to see per-hire earnings."
           }
           unstyled={unstyled}
         />

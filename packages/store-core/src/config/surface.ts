@@ -1,16 +1,17 @@
 /**
- * Deployment-surface check (PLAN_2 C2 + the P6.5 `getDeployedSurface` path).
+ * Deployment-surface check (PLAN_2 C2).
  *
  * A store must not render an empty grid when its target cluster simply has no
- * live listings (or, for `mainnet`, the surface is not deployed before Phase 9).
- * {@link getDeployedSurface} answers "is the catalog live on this cluster?" so a
- * template can render an explicit {@link SurfaceNotDeployedError}-driven page
- * ("listings are not live yet") instead of a silent empty state.
+ * live listings (or when a mainnet config lost its explicit `allowMainnet`
+ * opt-in at deploy time). {@link getDeployedSurface} answers "is the catalog
+ * live on this cluster?" so a template can render an explicit
+ * {@link SurfaceNotDeployedError}-driven page instead of a silent empty state.
  *
- * This is intentionally transport-shaped (it takes a `read`-like listing source)
- * rather than reimplementing the P6.5 on-chain surface read, which is unbuilt.
- * When P6.5 ships, the resolver can additionally consult `surface_revision`
- * without changing this surface.
+ * This is intentionally transport-shaped (it takes a `read`-like listing
+ * source). The SDK additionally exposes the on-chain capability read
+ * (`getDeployedSurface` from `@tetsuo-ai/marketplace-sdk`, which consults
+ * `surface_revision`) — the mainnet program has carried the FULL instruction
+ * surface since 2026-06-11.
  *
  * @module config/surface
  */
@@ -21,7 +22,7 @@ import type { StoreConfig, StoreNetwork } from "./schema.js";
  * not-deployed page.
  */
 export type SurfaceNotDeployedReason =
-  | "mainnet-not-launched"
+  | "mainnet-not-enabled"
   | "no-listings"
   | "unreachable";
 
@@ -53,8 +54,8 @@ export class SurfaceNotDeployedError extends Error {
     network: StoreNetwork,
   ): string {
     switch (reason) {
-      case "mainnet-not-launched":
-        return "Mainnet listings are not live yet. This store is configured for mainnet, which launches in Phase 9.";
+      case "mainnet-not-enabled":
+        return "This store targets mainnet but its config is missing the explicit `allowMainnet: true` real-funds opt-in. Set it in agenc.config.ts (see docs/GO_LIVE.md) and redeploy.";
       case "no-listings":
         return `No listings are live on ${network} yet. Check back soon.`;
       case "unreachable":
@@ -91,9 +92,9 @@ export interface SurfaceProbe {
  * Resolve whether the store's catalog surface is live on its target cluster.
  *
  * Order of checks:
- * 1. `mainnet` without `allowMainnet` → `mainnet-not-launched` WITHOUT a network
- *    call (the Phase 9 gate; a build-valid config can still reach here at boot
- *    if it set `allowMainnet`, in which case the probe runs normally).
+ * 1. `mainnet` without `allowMainnet` → `mainnet-not-enabled` WITHOUT a network
+ *    call (the real-funds opt-in gate; a build-valid config always carries
+ *    `allowMainnet: true` on mainnet, in which case the probe runs normally).
  * 2. Probe the catalog. A probe error → `unreachable`. Zero listings →
  *    `no-listings`. Otherwise → deployed.
  *
@@ -107,17 +108,17 @@ export async function getDeployedSurface(
 ): Promise<DeployedSurface> {
   const { network } = config;
 
-  // The Phase 9 mainnet gate: a config that reached runtime on mainnet without
-  // the explicit override is treated as not-launched (defense in depth — the
-  // build already rejects this, but a hand-edited deploy env should still get
-  // the explicit page, not an empty grid).
+  // The real-funds opt-in gate: a config that reached runtime on mainnet
+  // without the explicit override is treated as not-enabled (defense in depth —
+  // the build already rejects this, but a hand-edited deploy env should still
+  // get the explicit page, not an empty grid).
   if (network === "mainnet" && config.allowMainnet !== true) {
     return {
       deployed: false,
       network,
-      reason: "mainnet-not-launched",
+      reason: "mainnet-not-enabled",
       message: SurfaceNotDeployedError.defaultMessage(
-        "mainnet-not-launched",
+        "mainnet-not-enabled",
         network,
       ),
     };

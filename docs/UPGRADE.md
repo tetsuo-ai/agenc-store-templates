@@ -26,8 +26,9 @@ git commit -am "chore: bump AgenC store packages"
 git push             # your host (Vercel/Netlify) redeploys
 ```
 
-That's the whole upgrade path within this plan's horizon — including the Phase 9
-devnet→mainnet flip and any checkout security fix.
+That's the whole upgrade path within this plan's horizon — including the
+devnet→mainnet flip (see [GO_LIVE.md](GO_LIVE.md)) and any checkout security
+fix.
 
 ## How you'll KNOW you're behind
 

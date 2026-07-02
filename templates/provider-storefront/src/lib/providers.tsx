@@ -1,8 +1,8 @@
 /**
  * `<Providers>` — the client boundary that mounts `<AgencProvider>` above the
  * whole app. It wires reads (indexer-first + gPA fallback), the referrer config
- * (validated + stored + DISCLOSED, never injected — the P6.2 gate lives inside
- * the provider/`useHire`), and the network.
+ * (validated + stored + disclosed + INJECTED into every hire at the provider
+ * level — referral settlement is live on-chain), and the network.
  *
  * ## Read transport
  *
@@ -54,8 +54,9 @@ function indexerBaseUrl(): string | null {
 export function Providers({ children }: { children: ReactNode }) {
   const config = useMemo<AgencProviderConfig>(() => {
     const indexer = indexerBaseUrl();
-    // Referrer: accepted + validated + stored + disclosed; injected ONLY when
-    // P6.2 settlement is live (it is not). Never faked.
+    // Referrer: validated + stored + disclosed + injected into every hire by
+    // the provider (referral settlement is live on-chain). Earnings are read
+    // from chain, never faked.
     const referrer = {
       wallet: storeConfig.referrer.wallet,
       feeBps: storeConfig.referrer.feeBps,

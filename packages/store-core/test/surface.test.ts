@@ -48,7 +48,7 @@ describe("getDeployedSurface", () => {
     }
   });
 
-  it("reports mainnet-not-launched WITHOUT a network call for un-overridden mainnet", async () => {
+  it("reports mainnet-not-enabled WITHOUT a network call for un-overridden mainnet", async () => {
     // Build a mainnet config via the override so defineStore accepts it, then
     // simulate a deploy env that lost the override by clearing the flag.
     const config = defineStore({
@@ -66,7 +66,13 @@ describe("getDeployedSurface", () => {
     });
     expect(probed).toBe(false); // the gate short-circuits before the probe
     expect(result.deployed).toBe(false);
-    if (!result.deployed) expect(result.reason).toBe("mainnet-not-launched");
+    if (!result.deployed) {
+      expect(result.reason).toBe("mainnet-not-enabled");
+      // Mainnet IS live — the message must point at the missing opt-in, never
+      // claim the network "launches later".
+      expect(result.message).toMatch(/allowMainnet/);
+      expect(result.message).not.toMatch(/Phase 9/);
+    }
   });
 });
 

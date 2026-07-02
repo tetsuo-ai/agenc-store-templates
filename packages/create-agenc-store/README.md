@@ -42,12 +42,12 @@ npx create-agenc-store code-shop --yes \
 
 Run `npx create-agenc-store --help` for the full flag list.
 
-## The referrer fee (P6.2 gate)
+## The referrer fee
 
-The `--referrer` wallet earns on every hire — once PLAN.md **P6.2** (referral
-settlement) is live on-chain. Until then the fee is validated, stored, and
-disclosed but **never injected or fabricated**; the scaffolded store's
-`/earnings` page renders the not-live state.
+The `--referrer` wallet earns on every hire — referral settlement is **live
+on-chain**. The fee is validated before a single file is written, injected into
+each hire automatically at the provider level, and disclosed on the scaffolded
+store's `/trust` page + checkout; `/earnings` reads the real on-chain earnings.
 
 ## License
 
