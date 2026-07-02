@@ -4,7 +4,8 @@
  *
  * The store sections render four DISTINCT designed states, chosen by the
  * surface-check + curation logic in `store-core/config`:
- *  - SurfaceNotDeployed (mainnet pre-Phase-9, no listings, or unreachable),
+ *  - SurfaceNotDeployed (mainnet config missing its allowMainnet opt-in, no
+ *    listings, or unreachable),
  *  - EmptyCatalog (devnet/localnet, genuinely no supply),
  *  - ZeroMatch (there IS supply, but curation matched nothing),
  *  - IndexerUnreachable (transport error).
@@ -52,7 +53,7 @@ const listings: CurateableListing[] = [
 ];
 
 describe("SurfaceNotDeployed selection (getDeployedSurface)", () => {
-  it("mainnet without allowMainnet → not-launched WITHOUT a network call", async () => {
+  it("mainnet without allowMainnet → not-enabled WITHOUT a network call", async () => {
     // The build rejects mainnet without allowMainnet; the runtime surface guard
     // is defense-in-depth for a hand-edited deploy env. Build a valid mainnet
     // config (allowMainnet: true) then strip the flag to simulate that case.
@@ -63,7 +64,7 @@ describe("SurfaceNotDeployed selection (getDeployedSurface)", () => {
       },
     });
     expect(surface.deployed).toBe(false);
-    if (!surface.deployed) expect(surface.reason).toBe("mainnet-not-launched");
+    if (!surface.deployed) expect(surface.reason).toBe("mainnet-not-enabled");
   });
 
   it("zero listings → no-listings", async () => {

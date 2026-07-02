@@ -1,10 +1,17 @@
 /**
- * `<ListingDetailSection>` — the shared `/listings/[pda]` body (PLAN_2 C3). Wraps
- * `useListing` + `ProviderCard` + `HireButton`, joining the listing, its
- * provider track record, and the moderation projection in one cached read. This
- * is the per-store SEO surface (the page that emits JSON-LD + OG); the SEO tags
- * are emitted by the template via the `store-core/seo` helpers, while this
- * section renders the interactive body.
+ * `<ListingDetailSection>` — the shared `/listings/[pda]` body (PLAN_2 C3).
+ * Wraps `useListing` + `ProviderCard` + the hire→activation flow
+ * ({@link HireActivationButton}), joining the listing, its provider track
+ * record, and the moderation projection in one cached read. This is the
+ * per-store SEO surface (the page that emits JSON-LD + OG); the SEO tags are
+ * emitted by the template via the `store-core/seo` helpers, while this section
+ * renders the interactive body.
+ *
+ * The hire path is HUMANLESS (storefront-visitor): a plain-wallet buyer, task
+ * pinned to CreatorReview, and — because a hired task is unclaimable until its
+ * job spec is pinned — the flow chains `set_task_job_spec` behind the store's
+ * activation route automatically (marketplace-managed attestation, zero
+ * moderation config). The store referrer is injected at the provider level.
  *
  * Client component (`"use client"`): it uses hooks.
  *
@@ -13,7 +20,6 @@
 "use client";
 import type { ReactElement } from "react";
 import {
-  HireButton,
   ModerationBadge,
   ProviderCard,
   StateMessage,
@@ -22,34 +28,54 @@ import {
 import {
   useAgentTrackRecord,
   useListing,
-  type AnyHireInput,
+  type HumanlessHireFlowHireInput,
+  type HumanlessHireFlowResult,
 } from "@tetsuo-ai/marketplace-react/hooks";
+import {
+  HireActivationButton,
+  type HireActivationButtonProps,
+} from "./HireActivationButton.js";
+import type { StoreJobSpecDraft } from "../activation/index.js";
 
 /** Props for {@link ListingDetailSection}. */
 export interface ListingDetailSectionProps {
   /** The ServiceListing PDA. */
   pda: string;
   /**
-   * Build the per-hire input from the listing (compare-and-swap guards, taskId,
-   * creatorAgent). Forwarded to `HireButton`; the referrer is auto-injected by
-   * the provider when (and only when) the P6.2 capability is live.
+   * Build the per-hire input from the listing (compare-and-swap guards, fresh
+   * taskId, review window). Forwarded to the hire→activation flow; the
+   * referrer is auto-injected by the provider whenever one is configured.
    */
-  buildHireInput: (listing: HireCheckoutListing) => AnyHireInput;
-  /** Called after a successful hire (e.g. route to `/dashboard`). */
+  buildHireInput: (listing: HireCheckoutListing) => HumanlessHireFlowHireInput;
+  /**
+   * Build the job-spec draft pinned after the hire. Defaults to the
+   * "as listed" spec derived from the listing.
+   */
+  buildJobSpec?: HireActivationButtonProps["buildJobSpec"];
+  /** The store's activation route (defaults to the same-origin route). */
+  activationEndpoint?: string;
+  /** Called after the hire lands (before activation) with the Task PDA. */
   onHired?: (taskPda: string) => void;
+  /** Called after the FULL flow (hire + job-spec pin) succeeds. */
+  onActivated?: (result: HumanlessHireFlowResult) => void;
   /** Emit no theme classes (white-label). */
   unstyled?: boolean;
 }
 
+export type { StoreJobSpecDraft };
+
 /**
- * The listing detail body: spec/price/provider + the hire CTA.
+ * The listing detail body: spec/price/provider + the hire→activation CTA.
  *
  * @param props - {@link ListingDetailSectionProps}.
  */
 export function ListingDetailSection({
   pda,
   buildHireInput,
+  buildJobSpec,
+  activationEndpoint,
   onHired,
+  onActivated,
   unstyled,
 }: ListingDetailSectionProps): ReactElement {
   const { detail, listing, provider, moderation, isLoading, error, refetch } =
@@ -99,10 +125,13 @@ export function ListingDetailSection({
         onRetry={trackRecordQuery.refetch}
         unstyled={unstyled}
       />
-      <HireButton
+      <HireActivationButton
         listing={checkoutListing}
         buildHireInput={buildHireInput}
-        onHired={onHired ? (taskPda) => onHired(String(taskPda)) : undefined}
+        buildJobSpec={buildJobSpec}
+        activationEndpoint={activationEndpoint}
+        onHired={onHired}
+        onActivated={onActivated}
         unstyled={unstyled}
       />
     </div>

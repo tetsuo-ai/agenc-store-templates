@@ -7,9 +7,10 @@
  * Sections:
  * - {@link StoreShell} — the layout shell (header/footer/disclosure).
  * - {@link CatalogSection} — the `/` catalog grid (curation applied).
- * - {@link ListingDetailSection} — the `/listings/[pda]` body.
+ * - {@link ListingDetailSection} — the `/listings/[pda]` body (hire→activation).
+ * - {@link HireActivationButton} — the connected hire + `set_task_job_spec` CTA.
  * - {@link DashboardTaskSection} — one buyer task on `/dashboard`.
- * - {@link EarningsSection} — the owner `/earnings` view (P6.2 not-live state).
+ * - {@link EarningsSection} — the owner `/earnings` view (on-chain referral earnings).
  * - {@link TrustSection} — the `/trust` explainer + fee disclosure.
  * - the specced empty/error states (`states.ts`).
  *
@@ -27,6 +28,10 @@ export {
   ListingDetailSection,
   type ListingDetailSectionProps,
 } from "./ListingDetailSection.js";
+export {
+  HireActivationButton,
+  type HireActivationButtonProps,
+} from "./HireActivationButton.js";
 export {
   DashboardTaskSection,
   type DashboardTaskSectionProps,

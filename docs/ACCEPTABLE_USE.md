@@ -62,11 +62,11 @@ Every deployed store **must** keep the fee disclosure visible to buyers:
 - the checkout must surface the referral disclosure ("this site earns a referral
   fee").
 
-> **Note (P6.2).** Referral settlement is **not yet live on-chain**. Until the
-> PLAN.md P6.2 leg ships, the referral fee is validated, stored, and DISCLOSED
-> but **never charged or injected**, and the `/earnings` page renders the
-> not-live state. A store must not claim to a buyer that a referral fee was
-> charged before P6.2 is live. The templates enforce this; do not patch it out.
+> **Note.** Referral settlement is **live on-chain**: the configured referral
+> fee is injected into every hire at the provider level and paid atomically at
+> settlement. The disclosure requirements above are therefore about REAL money
+> flow — a store must always show buyers who earns the fee. The templates
+> enforce this; do not patch it out.
 
 ## 5. Reporting
 

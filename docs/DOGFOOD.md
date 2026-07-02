@@ -55,7 +55,8 @@ catalog. To make it an instance of `marketplace-store`:
    Confirm the catalog, a listing detail (JSON-LD), and `/dashboard` render
    against devnet.
 5. **[HUMAN] deploy** — replace the deployed Vite SPA with this Next instance
-   (mainnet after Phase 9). PLAN.md P10.1's steps already reference this
+   (mainnet requires the explicit `allowMainnet: true` opt-in — see
+   [GO_LIVE.md](GO_LIVE.md)). PLAN.md P10.1's steps already reference this
    instance.
 
 ## Why this is a rebuild, not a refactor
@@ -69,5 +70,5 @@ routing, and any storefront-only pages are a genuine rebuild. Scope it as such.
 
 - ✅ `marketplace-store` renders the on-chain book via the indexer on localnet
   (verified locally; `next build` green against the sandbox).
-- ⏸️ The production storefront swap + deploy is **[HUMAN]** (devnet now, mainnet
-  after Phase 9).
+- ⏸️ The production storefront swap + deploy is **[HUMAN]** (devnet now;
+  mainnet behind the deliberate `allowMainnet: true` opt-in).

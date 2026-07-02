@@ -5,8 +5,8 @@
  * mirrors the B2 widget disclosure so the earning party is always visible. Links
  * to the credible-exit doc (PLAN.md P8.6).
  *
- * Uses `ReferrerDisclosure` (P6.2-gated: shows the pending-support copy until
- * referral settlement is live) for the store-fee line.
+ * Uses `ReferrerDisclosure` for the store-fee line — referral settlement is
+ * live on-chain, so a configured referrer renders the present-tense copy.
  *
  * @module sections/TrustSection
  */
@@ -31,8 +31,9 @@ export interface TrustSectionProps {
    */
   referrer?: ValidatedReferrerConfig | null;
   /**
-   * Whether referral settlement is live on-chain (P6.2 capability). ALWAYS false
-   * today; forwarded to `ReferrerDisclosure` so the copy stays honest.
+   * Whether referral settlement is active for this store's hires (from
+   * `resolveReferrerCapability()` — true whenever a validated referrer is
+   * configured). Forwarded to `ReferrerDisclosure` so the copy stays honest.
    */
   referrerLive?: boolean;
   /** Link to the moderation policy. */

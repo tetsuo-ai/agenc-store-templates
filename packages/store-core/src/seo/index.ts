@@ -43,7 +43,12 @@ export {
 export {
   listingAgentCard,
   buildLlmsTxt,
+  AGENT_CARD_SCHEMA,
   type AgentCard,
+  type AgentCardPrice,
+  type AgentCardStore,
+  type AgentCardHireability,
+  type ListingAgentCardOptions,
 } from "./agent-card.js";
 
 /**

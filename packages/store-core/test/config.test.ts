@@ -11,6 +11,8 @@ import {
   safeDefineStore,
   StoreConfigError,
   REFERRER_COMBINED_FEE_BPS_CAP,
+  listingOperatorTerms,
+  checkMainnetGoLive,
 } from "../src/config/index.js";
 import {
   FULL_CONFIG,
@@ -149,7 +151,7 @@ describe("defineStore — MANDATED failure fixtures", () => {
     }
   });
 
-  it("rejects un-overridden mainnet (Phase 9 gate) with an actionable message", () => {
+  it("rejects un-overridden mainnet (real-funds opt-in gate) with an actionable message", () => {
     const result = safeDefineStore({
       ...MINIMAL_CONFIG,
       network: "mainnet",
@@ -160,8 +162,12 @@ describe("defineStore — MANDATED failure fixtures", () => {
         (issue) => issue.path.join(".") === "network",
       );
       expect(networkIssue).toBeDefined();
-      expect(networkIssue?.message).toMatch(/Phase 9/);
+      // The copy is off the retired "Phase 9" framing: it names the real-funds
+      // stake, the exact override, and the go-live checklist.
+      expect(networkIssue?.message).not.toMatch(/Phase 9/);
+      expect(networkIssue?.message).toMatch(/REAL funds/i);
       expect(networkIssue?.message).toMatch(/allowMainnet/);
+      expect(networkIssue?.message).toMatch(/GO_LIVE/);
     }
   });
 
@@ -201,6 +207,119 @@ describe("defineStore — reserved payment paths fail closed", () => {
     });
     expect(fiat.success).toBe(false);
     expect(x402.success).toBe(false);
+  });
+});
+
+describe("defineStore — moderation (sovereignty override only)", () => {
+  it("validates with NO moderation config at all (invisible-by-default)", () => {
+    const config = defineStore(MINIMAL_CONFIG);
+    expect(config.moderation).toBeUndefined();
+  });
+
+  it("accepts the optional attestorEndpoint sovereignty override", () => {
+    const config = defineStore({
+      ...MINIMAL_CONFIG,
+      moderation: { attestorEndpoint: "https://attestor.example.com/attest" },
+    });
+    expect(config.moderation?.attestorEndpoint).toBe(
+      "https://attestor.example.com/attest",
+    );
+  });
+
+  it("rejects a non-URL attestorEndpoint", () => {
+    const result = safeDefineStore({
+      ...MINIMAL_CONFIG,
+      moderation: { attestorEndpoint: "not-a-url" },
+    });
+    expect(result.success).toBe(false);
+  });
+});
+
+describe("defineStore — operator terms on listing creation", () => {
+  it("accepts an operator block and maps it to createServiceListing args", () => {
+    const config = defineStore({
+      ...MINIMAL_CONFIG,
+      operator: { wallet: REFERRER_WALLET, feeBps: 1000 },
+    });
+    expect(listingOperatorTerms(config)).toEqual({
+      operator: REFERRER_WALLET,
+      operatorFeeBps: 1000,
+    });
+  });
+
+  it("maps an absent operator block to the documented no-leg encoding", () => {
+    const config = defineStore(MINIMAL_CONFIG);
+    expect(listingOperatorTerms(config)).toEqual({
+      operator: null,
+      operatorFeeBps: 0,
+    });
+  });
+
+  it("rejects a non-base58 operator wallet and an over-cap fee", () => {
+    expect(
+      safeDefineStore({
+        ...MINIMAL_CONFIG,
+        operator: { wallet: "nope!!", feeBps: 100 },
+      }).success,
+    ).toBe(false);
+    expect(
+      safeDefineStore({
+        ...MINIMAL_CONFIG,
+        operator: {
+          wallet: REFERRER_WALLET,
+          feeBps: REFERRER_COMBINED_FEE_BPS_CAP + 1,
+        },
+      }).success,
+    ).toBe(false);
+  });
+});
+
+describe("checkMainnetGoLive — the real-funds checklist behind allowMainnet", () => {
+  const mainnetInput = {
+    ...MINIMAL_CONFIG,
+    network: "mainnet" as const,
+    allowMainnet: true,
+  };
+
+  it("passes for a production-shaped config (and needs NO moderation setup)", () => {
+    const config = defineStore({
+      ...mainnetInput,
+      api: { baseUrl: "https://indexer.example.com" },
+      seo: { siteUrl: "https://store.example.com" },
+    });
+    const result = checkMainnetGoLive(config, {});
+    expect(result.ready).toBe(true);
+    // Invisible-by-default: no check may mention moderation setup.
+    for (const c of result.checks) {
+      expect(c.id).not.toMatch(/moderation|attest/i);
+    }
+  });
+
+  it("fails a localhost read path unless AGENC_RPC_URL overrides it", () => {
+    const config = defineStore({
+      ...mainnetInput,
+      api: { baseUrl: "http://127.0.0.1:8899" },
+      seo: { siteUrl: "https://store.example.com" },
+    });
+    const bad = checkMainnetGoLive(config, {});
+    expect(bad.ready).toBe(false);
+    expect(bad.checks.find((c) => c.id === "read-path")?.ok).toBe(false);
+
+    const good = checkMainnetGoLive(config, {
+      AGENC_RPC_URL: "https://rpc.example.com",
+    });
+    expect(good.checks.find((c) => c.id === "read-path")?.ok).toBe(true);
+  });
+
+  it("fails a localhost siteUrl (job-spec pointers derive from it)", () => {
+    const config = defineStore({
+      ...mainnetInput,
+      api: { baseUrl: "https://indexer.example.com" },
+      seo: { siteUrl: "http://localhost:3000" },
+    });
+    const result = checkMainnetGoLive(config, {});
+    expect(result.ready).toBe(false);
+    expect(result.checks.find((c) => c.id === "site-url")?.ok).toBe(false);
   });
 });
 

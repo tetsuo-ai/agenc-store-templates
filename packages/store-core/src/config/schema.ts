@@ -5,14 +5,16 @@
  * the validated config. Misconfiguration FAILS THE BUILD with an actionable
  * message — a store never ships silently mis-wired.
  *
- * ## The referrer fee gate (PLAN_2 §0, P6.2)
+ * ## The referrer fee
  *
  * `referrer.wallet` MUST parse as a base58 Solana address (a wrong wallet would
  * silently drop the owner's fees, so it is a hard error) and `referrer.feeBps`
- * is range-checked. The on-chain referrer settlement leg (PLAN.md P6.2) is NOT
- * deployed yet — see {@link REFERRER_COMBINED_FEE_BPS_CAP} and the `feeBps`
- * docs for the combined-cap rule. Validation here is real; injection is gated
- * downstream by `marketplace-react`'s `resolveReferrerCapability()`.
+ * is range-checked. The on-chain referrer settlement leg is LIVE on mainnet
+ * (deployed 2026-06-11 with the full instruction surface) — a configured
+ * referrer is injected into every hire at the provider level by
+ * `marketplace-react` and paid atomically at settlement. See
+ * {@link REFERRER_COMBINED_FEE_BPS_CAP} and the `feeBps` docs for the
+ * combined-cap rule.
  *
  * @module config/schema
  */
@@ -20,14 +22,14 @@ import { isAddress } from "@solana/kit";
 import { z } from "zod";
 
 /**
- * The combined on-chain fee cap, in basis points, the P6.2 settlement leg will
- * enforce: `protocol + operator + referrer ≤ 4000 bps` (40%). A store owner's
+ * The combined on-chain fee cap, in basis points, the deployed settlement path
+ * enforces: `protocol + operator + referrer ≤ 4000 bps` (40%). A store owner's
  * referral fee shares this budget with the protocol fee and the listing's
  * operator fee, so the per-listing combined split is computed at checkout — but
  * a `feeBps` that ALONE already exceeds the whole budget can never be honored,
  * so it is rejected at build time here.
  *
- * @see https://github.com/tetsuo-ai/agenc-protocol PLAN.md P6.2
+ * @see https://github.com/tetsuo-ai/agenc-protocol
  */
 export const REFERRER_COMBINED_FEE_BPS_CAP = 4000;
 
@@ -74,9 +76,11 @@ export const listingCategorySchema = z
 export type ListingCategory = z.infer<typeof listingCategorySchema>;
 
 /**
- * Referrer config. EVERY hire under this store pays the owner this fee (P6.2;
- * §0 gate). The wallet is validated as base58 and the fee is range-checked +
- * combined-cap-bounded at build time.
+ * Referrer config. EVERY hire under this store pays the owner this fee — the
+ * referral settlement leg is live on-chain, and `marketplace-react` injects the
+ * configured referrer into each hire at the provider level. The wallet is
+ * validated as base58 and the fee is range-checked + combined-cap-bounded at
+ * build time.
  */
 export const referrerSchema = z
   .object({
@@ -103,7 +107,7 @@ export const referrerSchema = z
         REFERRER_FEE_BPS_MAX,
         `feeBps must be ≤ ${REFERRER_FEE_BPS_MAX} bps — the referrer share alone ` +
           `cannot exceed the combined protocol + operator + referrer cap of ` +
-          `${REFERRER_COMBINED_FEE_BPS_CAP} bps (P6.2)`,
+          `${REFERRER_COMBINED_FEE_BPS_CAP} bps enforced on-chain at settlement`,
       ),
   })
   .strict();
@@ -175,9 +179,10 @@ export const curationSchema = z
     /** Listing-level denylist (by ServiceListing PDA). Wins over `include`. */
     exclude: z.array(base58Address).optional(),
     /**
-     * Minimum provider rating once PLAN.md P6.1 `rate_hire` is live. Accepted +
-     * stored now; the filter is inert until ratings exist (the store never
-     * fabricates a rating).
+     * Minimum provider rating (the on-chain `rate_hire` aggregate). Accepted +
+     * stored; the filter only bites once rating data is available on the read
+     * path — a listing without ratings is never filtered out and a rating is
+     * never fabricated.
      */
     minRating: z.number().min(0).max(5).optional(),
     /**
@@ -290,10 +295,66 @@ export const apiSchema = z
 export type ApiConfig = z.infer<typeof apiSchema>;
 
 /**
+ * Moderation seam config — **entirely optional** (invisible-by-default).
+ *
+ * The default hire→activation flow needs ZERO moderation configuration: the
+ * store's activation route hosts the job spec and requests the task moderation
+ * attestation from the marketplace-managed attestation service automatically.
+ * The only field here is a SOVEREIGNTY override for operators who run their own
+ * attestor (a self-hosted policy scanner + signer) — never a setup step.
+ */
+export const moderationSchema = z
+  .object({
+    /**
+     * OPTIONAL sovereignty override: the URL of a self-hosted task-moderation
+     * attestation endpoint. Leave unset (the default) to use the
+     * marketplace-managed attestation service with zero configuration.
+     */
+    attestorEndpoint: z
+      .string()
+      .url("moderation.attestorEndpoint must be an absolute URL")
+      .optional(),
+  })
+  .strict();
+
+/** {@link moderationSchema} as a TypeScript type. */
+export type ModerationConfig = z.infer<typeof moderationSchema>;
+
+/**
+ * Operator terms for listings this store's operator CREATES on behalf of
+ * providers. These flow into the SDK's `createServiceListing` (its existing
+ * `operator` / `operatorFeeBps` params), stamping the operator leg of the
+ * on-chain `protocol + operator + referrer` settlement split onto each listing.
+ * Optional — a store that only CARRIES third-party listings never sets this.
+ */
+export const operatorSchema = z
+  .object({
+    /** The operator wallet that earns the per-listing operator fee. */
+    wallet: base58Address,
+    /**
+     * Operator fee in basis points, bounded by the combined on-chain cap
+     * (`protocol + operator + referrer ≤ 4000 bps`).
+     */
+    feeBps: z
+      .number()
+      .int("operator.feeBps must be an integer number of basis points")
+      .min(0, "operator.feeBps must be ≥ 0")
+      .max(
+        REFERRER_COMBINED_FEE_BPS_CAP,
+        `operator.feeBps must be ≤ ${REFERRER_COMBINED_FEE_BPS_CAP} bps — the operator ` +
+          "share alone cannot exceed the combined protocol + operator + referrer cap",
+      ),
+  })
+  .strict();
+
+/** {@link operatorSchema} as a TypeScript type. */
+export type OperatorConfig = z.infer<typeof operatorSchema>;
+
+/**
  * Target cluster. `"localnet"` is a first-class value for the local-first build
- * strategy (the sandbox stack). `"mainnet"` warns loudly and FAILS validation
- * until Phase 9 unless `allowMainnet: true` is set explicitly
- * ({@link networkSchema}).
+ * strategy (the sandbox stack). `"mainnet"` points the store at REAL funds and
+ * FAILS validation unless `allowMainnet: true` is set explicitly
+ * ({@link storeConfigSchema}).
  */
 export const storeNetworkSchema = z.enum(["localnet", "devnet", "mainnet"]);
 
@@ -313,14 +374,16 @@ export const storeConfigObjectSchema = z
     /** Target cluster. See {@link storeNetworkSchema}. */
     network: storeNetworkSchema,
     /**
-     * Explicit mainnet opt-in. `network: "mainnet"` FAILS validation until
-     * Phase 9 unless this is `true` — a deliberate, conspicuous override so a
-     * store is never pointed at real funds by accident.
+     * Explicit mainnet opt-in. `network: "mainnet"` FAILS validation unless
+     * this is `true` — a deliberate, conspicuous second step so a store is
+     * never pointed at real funds by accident. Before setting it, walk the
+     * real-funds go-live checklist (`docs/GO_LIVE.md` /
+     * {@link checkMainnetGoLive}).
      */
     allowMainnet: z.boolean().optional(),
     /** Hosted indexer connection (P3.2). */
     api: apiSchema,
-    /** Referrer fee config (P6.2; §0 gate). */
+    /** Referrer fee config — the store owner's per-hire referral leg. */
     referrer: referrerSchema,
     /** Branding / white-label surface. */
     branding: brandingSchema.default({ poweredBy: true }),
@@ -330,13 +393,23 @@ export const storeConfigObjectSchema = z
     payments: paymentsSchema.default({ wallets: true }),
     /** SEO surface. `siteUrl` required; emitters default ON. */
     seo: seoSchema,
+    /**
+     * OPTIONAL moderation seam (sovereignty override only). The default flow
+     * needs zero moderation config — see {@link moderationSchema}.
+     */
+    moderation: moderationSchema.optional(),
+    /**
+     * OPTIONAL operator terms for listings created by this store's operator.
+     * See {@link operatorSchema}.
+     */
+    operator: operatorSchema.optional(),
   })
   .strict();
 
 /**
  * The full, validated {@link StoreConfig} schema. Adds the cross-field mainnet
  * guard on top of {@link storeConfigObjectSchema}: `network: "mainnet"` without
- * `allowMainnet: true` is a build error (Phase 9 gate).
+ * `allowMainnet: true` is a build error (the real-funds opt-in gate).
  */
 export const storeConfigSchema = storeConfigObjectSchema.superRefine(
   (value, ctx) => {
@@ -345,9 +418,12 @@ export const storeConfigSchema = storeConfigObjectSchema.superRefine(
         code: z.ZodIssueCode.custom,
         path: ["network"],
         message:
-          'network: "mainnet" is gated until Phase 9. To deploy a real-funds ' +
-          "store deliberately, set `allowMainnet: true` in the config. " +
-          'Until then use "localnet" or "devnet".',
+          'network: "mainnet" points this store at REAL funds. Confirm the ' +
+          "deliberate opt-in by setting `allowMainnet: true` in agenc.config.ts " +
+          "AFTER walking the go-live checklist (docs/GO_LIVE.md: env + RPC " +
+          "config — no moderation setup is needed; attestation is " +
+          'marketplace-managed by default). Use "localnet" or "devnet" for ' +
+          "development.",
       });
     }
   },

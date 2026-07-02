@@ -2,6 +2,13 @@
   "schema": "agenc.store-changelog/v1",
   "entries": [
     {
+      "version": "0.2.0",
+      "date": "2026-07-01",
+      "summary": "Current-packages release (WP-B1): sdk ^0.6.1 / react ^0.2.0 pins (0.3.0 encodings are rejected by the deployed program — bump immediately); post-hire activation wired into the hire flow (useHumanlessHireFlow + the store activation route, zero moderation config); provider-level referrer injection (settlement live); operator terms on listing creation; agent-card unified to agenc.agentCard.v1; mainnet gate re-copy + go-live checklist.",
+      "security": true,
+      "url": "https://github.com/tetsuo-ai/agenc-store-templates/releases/tag/v0.2.0"
+    },
+    {
       "version": "0.1.0",
       "date": "2026-06-10",
       "summary": "Initial store-core: config schema (defineStore), SEO helpers, shared page sections, instance-upgrade primitives, and the local sandbox bootstrap.",

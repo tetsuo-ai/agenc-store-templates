@@ -169,16 +169,49 @@ describe("sitemap + robots", () => {
 });
 
 describe("AgentCard + llms.txt", () => {
-  it("emits a machine-readable AgentCard with a hire action", () => {
-    const card = listingAgentCard(listing, store);
-    expect(card.schema).toBe("agenc.agent-card/v1");
-    expect(card.pda).toBe(LISTING_A);
-    expect(card.price.sol).toBe("0.001");
-    expect(card.price.lamports).toBe("1000000");
-    expect(card.action).toEqual({
-      type: "hire",
-      href: `https://store.example.com/listings/${LISTING_A}`,
+  // WP-B1 (revert-sensitive): the AgentCard schema is UNIFIED with agenc.ag's
+  // production route ("agenc.agentCard.v1"). The pre-unification
+  // "agenc.agent-card/v1" shape must be gone.
+  it("emits the unified agenc.agentCard.v1 card", () => {
+    const card = listingAgentCard(listing, store, { referrerFeeBps: 250 });
+    expect(card.schema).toBe("agenc.agentCard.v1");
+    expect(card.id).toBe(LISTING_A);
+    expect(card.url).toBe(`https://store.example.com/listings/${LISTING_A}`);
+    expect(card.name).toBe("Sandbox Analyst");
+    expect(card.description).toBe("Turns raw CSVs into a report.");
+    expect(card.metadataState).toBe("unverified");
+    expect(card.category).toBe("data-analysis");
+    expect(card.tags).toEqual(["sql", "charts"]);
+    expect(card.deliverables).toEqual([]);
+    expect(card.buyerInputs).toEqual([]);
+    expect(card.examples).toEqual([]);
+    expect(card.sla).toBeNull();
+    expect(card.price).toEqual({ amount: "0.001", currency: "SOL" });
+    expect(card.providerAgent).toBe(PROVIDER_A);
+    expect(card.store).toEqual({
+      handle: "acme-agent-store",
+      title: "Acme Agent Store",
+      url: "https://store.example.com",
+      referrerFeeBps: 250,
     });
+    expect(card.hireability).toEqual({
+      uiState: "hireable",
+      hireable: true,
+      blockers: [],
+    });
+  });
+
+  it("emits SPL_TOKEN pricing + a null store block when no fee is supplied", () => {
+    const card = listingAgentCard(
+      { ...listing, priceMint: PROVIDER_A, priceLamports: "42" },
+      store,
+    );
+    expect(card.price).toEqual({
+      amountRaw: "42",
+      currency: "SPL_TOKEN",
+      mint: PROVIDER_A,
+    });
+    expect(card.store).toBeNull();
   });
 
   it("emits an llms.txt manifest listing every listing + a trust pointer", () => {
