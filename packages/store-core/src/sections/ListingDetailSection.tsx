@@ -54,8 +54,12 @@ export interface ListingDetailSectionProps {
   buildJobSpec?: HireActivationButtonProps["buildJobSpec"];
   /** The store's activation route (defaults to the same-origin route). */
   activationEndpoint?: string;
-  /** Called after the hire lands (before activation) with the Task PDA. */
-  onHired?: (taskPda: string) => void;
+  /**
+   * Called the moment the hire LANDS (before activation) with the Task PDA
+   * and the repair context — record it so an activation failure leaves the
+   * funded task visible (and re-activatable) on the dashboard.
+   */
+  onHired?: HireActivationButtonProps["onHired"];
   /** Called after the FULL flow (hire + job-spec pin) succeeds. */
   onActivated?: (result: HumanlessHireFlowResult) => void;
   /** Emit no theme classes (white-label). */

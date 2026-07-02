@@ -82,11 +82,15 @@
   "devDependencies": {
     "@solana/kit": "^6.9.0",
     "@solana/program-client-core": "^6.4.0",
+    "@testing-library/dom": "^10.4.1",
+    "@testing-library/react": "^16.3.2",
     "@tetsuo-ai/marketplace-react": "^0.2.0",
     "@tetsuo-ai/marketplace-sdk": "^0.6.1",
     "@types/react": "^18.3.12",
+    "jsdom": "^26.1.0",
     "litesvm": "^1.1.0",
     "react": "^18.3.1",
+    "react-dom": "^18.3.1",
     "tsup": "8.5.1",
     "typescript": "5.9.3",
     "vitest": "4.1.8"

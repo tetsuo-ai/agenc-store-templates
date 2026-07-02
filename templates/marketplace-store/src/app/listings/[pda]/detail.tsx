@@ -14,13 +14,18 @@
  * route — a hired task is not claimable by workers until that happens. The
  * store referrer (wallet + feeBps from agenc.config.ts) is injected into the
  * hire at the provider level; it is never threaded through this input.
+ *
+ * Money safety: `onHired` fires the MOMENT the hire lands (before activation)
+ * and records the task with `activated: false` + the repair context, so even
+ * an activation failure leaves the funded task visible — and re-activatable —
+ * on `/dashboard`. `onActivated` flips the record to `activated: true`.
  */
 "use client";
 import { useRouter } from "next/navigation";
 import { ListingDetailSection } from "@tetsuo-ai/store-core/sections";
 import type { HireCheckoutListing } from "@tetsuo-ai/marketplace-react";
 import type { HumanlessHireFlowHireInput } from "@tetsuo-ai/marketplace-react/hooks";
-import { addBuyerTask } from "@/lib/buyer-tasks";
+import { addBuyerTask, markBuyerTaskActivated } from "@/lib/buyer-tasks";
 
 /** Buyer review window before auto-acceptance, in seconds (7 days). */
 const REVIEW_WINDOW_SECS = 7 * 24 * 60 * 60;
@@ -57,12 +62,26 @@ export function ListingDetail({ pda }: { pda: string }) {
         // Window (seconds) the buyer has to review before auto-acceptance.
         reviewWindowSecs: REVIEW_WINDOW_SECS,
       })}
-      // Track the task as soon as the hire lands, so even an activation
-      // hiccup leaves the task visible (and re-activatable) on /dashboard.
-      onHired={(taskPda) => addBuyerTask(taskPda)}
+      // Track the task the moment the hire LANDS (before activation), with the
+      // repair context — an activation hiccup leaves the task visible (and
+      // re-activatable) on /dashboard instead of stranding the funded escrow.
+      onHired={(taskPda, context) =>
+        addBuyerTask({
+          taskPda,
+          listing: context.listing,
+          taskIdHex: context.taskIdHex,
+          hireSignature: context.hireSignature,
+          referrerInjected: context.referrerInjected,
+          jobSpec: context.jobSpec,
+          activated: false,
+        })
+      }
       // Route only after the FULL flow (hire + job-spec pin) succeeds — the
       // task the buyer sees on the dashboard is claimable by workers.
-      onActivated={() => router.push("/dashboard")}
+      onActivated={(result) => {
+        markBuyerTaskActivated(String(result.taskPda));
+        router.push("/dashboard");
+      }}
     />
   );
 }

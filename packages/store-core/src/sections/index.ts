@@ -31,7 +31,13 @@ export {
 export {
   HireActivationButton,
   type HireActivationButtonProps,
+  type HireLandedContext,
 } from "./HireActivationButton.js";
+export {
+  TaskActivationRepair,
+  type TaskActivationRepairProps,
+  type TaskActivationRepairResult,
+} from "./TaskActivationRepair.js";
 export {
   DashboardTaskSection,
   type DashboardTaskSectionProps,
