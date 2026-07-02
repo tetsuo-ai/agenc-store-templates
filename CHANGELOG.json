@@ -4,7 +4,7 @@
     {
       "version": "0.2.0",
       "date": "2026-07-01",
-      "summary": "Current-packages release (WP-B1): sdk ^0.6.1 / react ^0.2.0 pins (0.3.0 encodings are rejected by the deployed program — bump immediately); post-hire activation wired into the hire flow (useHumanlessHireFlow + the store activation route, zero moderation config); provider-level referrer injection (settlement live); operator terms on listing creation; agent-card unified to agenc.agentCard.v1; mainnet gate re-copy + go-live checklist.",
+      "summary": "Current-packages release (WP-B1): sdk ^0.6.1 / react ^0.2.0 pins (0.3.0 encodings are rejected by the deployed program — bump immediately); post-hire activation wired into the hire flow (useHumanlessHireFlow + the store activation route, zero moderation config); provider-level referrer injection (settlement live); operator terms on listing creation; agent-card unified to agenc.agentCard.v1; mainnet gate re-copy + go-live checklist. Review hardening: a hire is recorded the moment it lands and every retry surface (modal Confirm, inline panel, dashboard TaskActivationRepair) re-runs ONLY activation against the existing task — an activation failure can no longer strand a funded escrow invisibly or double-charge on retry; the activation route verifies the task on-chain, rate-limits, and caps hosted specs; serverless deploys fail job-spec hosting loudly with an actionable error (AGENC_JOB_SPEC_DIR override; job-spec-hosting go-live check).",
       "security": true,
       "url": "https://github.com/tetsuo-ai/agenc-store-templates/releases/tag/v0.2.0"
     },
