@@ -65,13 +65,21 @@ export function buildListingJobSpec(input: {
   brief?: string | undefined;
 }): StoreJobSpecDraft {
   const name = input.listingName.trim() || "the listed service";
+  // Bound the composed deliverable: `normalizeStoreJobSpec` REJECTS items over
+  // `JOB_SPEC_LIMITS.itemChars`, and this runs AFTER the hire is funded — an
+  // over-long listing `specUri` (hostile or sloppy) must degrade to the no-URI
+  // variant instead of deterministically failing every activation.
+  const specUri = input.specUri?.trim();
+  const withUri = specUri
+    ? `Deliver the service exactly as described by the listing spec (${specUri}).`
+    : null;
+  const deliverable =
+    withUri !== null && withUri.length <= JOB_SPEC_LIMITS.itemChars
+      ? withUri
+      : "Deliver the service exactly as described in the on-chain listing.";
   const draft: StoreJobSpecDraft = {
     title: `Deliver "${name}" as listed`.slice(0, JOB_SPEC_LIMITS.titleChars),
-    deliverables: [
-      input.specUri
-        ? `Deliver the service exactly as described by the listing spec (${input.specUri}).`
-        : "Deliver the service exactly as described in the on-chain listing.",
-    ],
+    deliverables: [deliverable],
     acceptanceCriteria: [
       "The result matches the listing's published spec and scope.",
       "The buyer reviews and accepts the submission (CreatorReview settlement).",

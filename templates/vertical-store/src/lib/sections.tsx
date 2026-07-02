@@ -18,6 +18,7 @@ export {
   CatalogSection,
   ListingDetailSection,
   DashboardTaskSection,
+  TaskActivationRepair,
   EarningsSection,
   TrustSection,
   SurfaceNotDeployedSection,

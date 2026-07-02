@@ -5,10 +5,9 @@
  * and check that its sha-256 matches the pinned `job_spec_hash`.
  */
 import {
-  DEFAULT_JOB_SPEC_DIRECTORY,
   readHostedJobSpec,
+  resolveJobSpecDirectory,
 } from "@tetsuo-ai/store-core/activation/server";
-import path from "node:path";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -17,8 +16,10 @@ type Params = { params: Promise<{ hash: string }> };
 
 export async function GET(_req: Request, { params }: Params): Promise<Response> {
   const { hash } = await params;
+  // Same directory resolution as the activation route (honors the
+  // AGENC_JOB_SPEC_DIR durable-volume override).
   const body = await readHostedJobSpec({
-    directory: path.resolve(process.cwd(), DEFAULT_JOB_SPEC_DIRECTORY),
+    directory: resolveJobSpecDirectory(),
     hashHex: hash,
   });
   if (body === null) {

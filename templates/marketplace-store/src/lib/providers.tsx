@@ -13,9 +13,17 @@
  * `api.baseUrl` is a real hosted indexer we pass `indexer` and let the provider
  * resolve indexer-first.
  *
- * The signer is NOT wired here: wallet connection is a buyer action surfaced on
- * the pages that need it (`useWalletSigner` bridges Wallet Standard when the
- * buyer connects). A read-only browse + SEO render needs no signer.
+ * ## Signer (HONEST scope note)
+ *
+ * NO wallet signer is wired here, and the template ships no wallet-connect
+ * UI yet: `useWalletSigner()` only bridges a Wallet Standard wallet when a
+ * caller passes it an adapter, and the `@tetsuo-ai/signer-adapters` package
+ * that will provide that adapter has not shipped. Until it does (or you wire
+ * `config.signer`/`config.client` yourself), the store is read-only in the
+ * browser: browse/SEO/agent-cards work fully, while hire/review/activation
+ * buttons remain disabled with a "connect a wallet" hint. The hire→activation
+ * flow itself is exercised end to end against the real program in
+ * store-core's signed lifecycle suite.
  */
 "use client";
 import { useMemo, type ReactNode } from "react";

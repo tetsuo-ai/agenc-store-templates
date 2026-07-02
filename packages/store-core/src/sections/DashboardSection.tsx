@@ -11,7 +11,7 @@
  * @module sections/DashboardSection
  */
 "use client";
-import type { ReactElement } from "react";
+import type { ReactElement, ReactNode } from "react";
 import type { Address } from "@solana/kit";
 import { address } from "@solana/kit";
 import {
@@ -39,6 +39,13 @@ export interface DashboardTaskSectionProps {
     | Promise<Uint8Array | string>
     | Uint8Array
     | string;
+  /**
+   * Optional activation-repair slot: render a {@link TaskActivationRepair}
+   * here for a hired task whose job spec was never pinned (funded but not
+   * claimable). The template owns detection (it tracks activation state with
+   * its buyer-task records).
+   */
+  activationRepair?: ReactNode;
   /** Emit no theme classes (white-label). */
   unstyled?: boolean;
 }
@@ -50,6 +57,7 @@ export interface DashboardTaskSectionProps {
  */
 export function DashboardTaskSection({
   taskPda,
+  activationRepair,
   unstyled,
 }: DashboardTaskSectionProps): ReactElement {
   // `useSubmissionReview` types its arg as the SDK's branded `Address`; the
@@ -81,6 +89,8 @@ export function DashboardTaskSection({
       <header style={unstyled ? undefined : { color: "var(--agenc-text-muted, #B8A8D9)" }}>
         Task {truncateAddress(taskPda)}
       </header>
+
+      {activationRepair}
 
       <TaskTimeline
         status={taskStatus.status}
