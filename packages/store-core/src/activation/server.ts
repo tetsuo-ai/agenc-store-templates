@@ -52,9 +52,15 @@ import { detectEphemeralHosting } from "../config/go-live.js";
  * sovereignty override is configured. Marketplace-managed means: no user-held
  * token, no signup, no configuration — the store's activation route calls it
  * automatically for every hire.
+ *
+ * Points at the open, self-hostable marketplace moderation API (WP-C1,
+ * `github.com/tetsuo-ai/agenc-moderation-api`), which — unlike the previous
+ * `marketplace.agenc.tech` route — requires NO kit-entitlement headers. An
+ * operator MAY point `moderation.attestorEndpoint` at their own attestor for
+ * sovereignty.
  */
 export const DEFAULT_TASK_ATTESTOR_ENDPOINT =
-  "https://marketplace.agenc.tech/api/task-moderation/attest";
+  "https://attest.agenc.ag/api/task-moderation/attest";
 
 /** Default request-size bound for the activation route. */
 export const DEFAULT_MAX_REQUEST_BYTES = 128 * 1024;
