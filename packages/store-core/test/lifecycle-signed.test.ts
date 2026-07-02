@@ -165,6 +165,15 @@ describe("signed store lifecycle (litesvm, real program)", () => {
           );
           return { attested: true, txSignature: sent.signature };
         },
+        // The deployed route verifies the task exists before hosting or
+        // attesting anything (createRpcTaskVerifier); here the same seam is
+        // wired straight to the litesvm ledger.
+        verifyTask: async (pda) => {
+          const account = market.svm.getAccount(address(pda));
+          return account?.exists
+            ? { ok: true }
+            : { ok: false, reason: "task not found on-chain" };
+        },
       });
       // Browser half: the exact host the templates hand to
       // useHumanlessHireFlow, with fetch routed straight into the handler.
@@ -254,6 +263,53 @@ describe("signed store lifecycle (litesvm, real program)", () => {
       ).toBeGreaterThan(0n);
       // Escrow closed on settlement.
       expect(market.svm.getAccount(escrowPda)?.exists).toBe(false);
+    },
+  );
+
+  it(
+    "the activation route refuses a task PDA that does not exist on-chain",
+    { timeout: 120_000 },
+    async () => {
+      const hosting = createMemoryJobSpecStore({
+        publicBaseUrl: "https://store.example.com/api/agenc/job-specs",
+      });
+      let attestorCalled = false;
+      const handler = createActivateJobSpecHandler({
+        storeJobSpec: hosting.storeJobSpec,
+        attestTaskModeration: async () => {
+          attestorCalled = true;
+          return { attested: true };
+        },
+        verifyTask: async (pda) => {
+          const account = market.svm.getAccount(address(pda));
+          return account?.exists
+            ? { ok: true }
+            : { ok: false, reason: "task not found on-chain" };
+        },
+      });
+      const host = createStoreActivationHost({
+        endpoint: "https://store.example.com/api/agenc/activate-job-spec",
+        fetch: (async (url: RequestInfo | URL, init?: RequestInit) =>
+          handler(new Request(url, init))) as typeof fetch,
+      });
+      // A never-hired (shape-valid) PDA: derive one from an unused task id.
+      const [ghostTask] = await findTaskPda({
+        creator: buyer.address,
+        taskId: new Uint8Array(32).fill(99),
+      });
+      await expect(
+        host({
+          taskPda: String(ghostTask),
+          taskId: new Uint8Array(32).fill(99),
+          listing: String(listingPda),
+          jobSpec: buildListingJobSpec({ listingName: "Ghost" }),
+          hireSignature: "sig",
+          referrerInjected: false,
+        }),
+      ).rejects.toThrow(/Task verification failed/i);
+      // Fail-closed BEFORE side effects: nothing hosted, nothing attested.
+      expect(hosting.hosted.size).toBe(0);
+      expect(attestorCalled).toBe(false);
     },
   );
 

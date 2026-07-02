@@ -37,13 +37,23 @@ const { ready, checks } = checkMainnetGoLive(storeConfig);
    wallet its fee atomically, so a wrong wallet is lost revenue.
 5. **Env hygiene** — `.env` values (`AGENC_RPC_URL`, `AGENC_API_KEY`) are set
    in your host's env settings, not committed.
-6. **Persistent job-spec hosting** — the default activation route hosts
-   canonical job-spec JSON on the app filesystem (`.agenc/job-specs`). On a
-   VPS/container with a persistent disk this works as-is; on ephemeral
-   serverless hosts, mount persistent storage or swap the `storeJobSpec` seam
-   in `src/app/api/agenc/activate-job-spec/route.ts` for your object store.
-   The pinned on-chain hash keeps every hosted document verifiable regardless
-   of where it lives.
+6. **Durable job-spec hosting** (machine-checked as `job-spec-hosting`) — the
+   default activation route hosts canonical job-spec JSON on the app
+   filesystem (`.agenc/job-specs`), and the URI it returns is **pinned
+   on-chain** — so the hosting must outlive the request. On a VPS/container
+   with a persistent disk this works as-is. On serverless platforms
+   (Vercel/Netlify/Lambda/Cloud Run/Cloudflare Pages — detected from their env
+   markers) the function filesystem is read-only or per-instance, so the store
+   **fails every activation loudly with an actionable error** rather than
+   pinning `job_spec_uri` pointers that 404. Fix it one of two ways:
+   - set `AGENC_JOB_SPEC_DIR` to a mounted persistent volume (both the
+     activation route and the serving route honor it), or
+   - swap the `storeJobSpec` seam in
+     `src/app/api/agenc/activate-job-spec/route.ts` for your object store.
+   For belt-and-braces deploy tooling, `probeJobSpecHostingDurability(dir)`
+   (from `@tetsuo-ai/store-core/activation/server`) runs a write+readback
+   probe against the resolved directory. The pinned on-chain hash keeps every
+   hosted document verifiable regardless of where it lives.
 
 ## What is deliberately NOT on this checklist
 

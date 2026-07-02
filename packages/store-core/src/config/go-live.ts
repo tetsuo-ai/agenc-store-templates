@@ -40,6 +40,37 @@ export interface GoLiveResult {
 export interface GoLiveEnv {
   /** Optional RPC override (`AGENC_RPC_URL`). */
   AGENC_RPC_URL?: string | undefined;
+  /** Operator-provided DURABLE job-spec directory (e.g. a mounted volume). */
+  AGENC_JOB_SPEC_DIR?: string | undefined;
+  /** Set by Vercel builds/functions. */
+  VERCEL?: string | undefined;
+  /** Set by Netlify builds/functions. */
+  NETLIFY?: string | undefined;
+  /** Set inside AWS Lambda (raw or behind serverless frameworks). */
+  AWS_LAMBDA_FUNCTION_NAME?: string | undefined;
+  /** Set by Cloud Run / Cloud Functions gen2. */
+  K_SERVICE?: string | undefined;
+  /** Set by Cloudflare Pages builds. */
+  CF_PAGES?: string | undefined;
+}
+
+/**
+ * Detect a serverless/ephemeral-filesystem hosting platform from its
+ * well-known environment markers. On these platforms the default FILE-BACKED
+ * job-spec hosting is broken by construction: the function filesystem is
+ * read-only or per-instance, so a POSTed spec either fails to write or is not
+ * readable by the GET route that serves the on-chain `job_spec_uri`.
+ *
+ * Pure env sniffing (client-bundle safe — no node imports). Returns the
+ * platform name, or `null` when none is detected.
+ */
+export function detectEphemeralHosting(env: GoLiveEnv): string | null {
+  if (env.VERCEL) return "Vercel";
+  if (env.NETLIFY) return "Netlify";
+  if (env.AWS_LAMBDA_FUNCTION_NAME) return "AWS Lambda";
+  if (env.K_SERVICE) return "Google Cloud Run";
+  if (env.CF_PAGES) return "Cloudflare Pages";
+  return null;
 }
 
 function check(
@@ -123,6 +154,16 @@ export function checkMainnetGoLive(
       "Referrer wallet configured (the owner's earning leg)",
       config.referrer.wallet.length > 0,
       "Configure `referrer.wallet` — it is the wallet that earns the store's referral fee on every hire.",
+    ),
+  );
+
+  const ephemeralPlatform = detectEphemeralHosting(env);
+  checks.push(
+    check(
+      "job-spec-hosting",
+      "Durable job-spec hosting (activation pins its URI on-chain)",
+      ephemeralPlatform === null || Boolean(env.AGENC_JOB_SPEC_DIR?.trim()),
+      `This deploy runs on ${ephemeralPlatform ?? "a serverless platform"}, where the default file-backed job-spec hosting is ephemeral: every hire's activation would fail (or its on-chain job_spec_uri would 404). Set AGENC_JOB_SPEC_DIR to a mounted persistent volume, or swap the storeJobSpec seam in src/app/api/agenc/activate-job-spec/route.ts for durable object storage. See docs/GO_LIVE.md § job-spec hosting.`,
     ),
   );
 

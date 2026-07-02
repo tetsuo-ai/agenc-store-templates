@@ -21,6 +21,18 @@ After deploy, edit `agenc.config.ts`: set `curation.categories` to **your
 vertical's category token**, your store name, **your referrer wallet**, and
 `network`, then redeploy.
 
+> **⚠️ Hires need durable job-spec hosting — serverless defaults are not it.**
+> Browsing, SEO, and agent cards work on Vercel/Netlify out of the box, but the
+> post-hire activation route hosts canonical job-spec JSON on the app
+> filesystem by default, and serverless function filesystems are read-only or
+> per-instance. On these platforms the store detects this and **fails
+> activations loudly with an actionable error** (instead of pinning on-chain
+> `job_spec_uri` pointers that 404). Before taking real hires on such a
+> deploy: set `AGENC_JOB_SPEC_DIR` to a mounted persistent volume, or swap the
+> `storeJobSpec` seam in `src/app/api/agenc/activate-job-spec/route.ts` for
+> durable object storage. The mainnet go-live checklist
+> ([`docs/GO_LIVE.md`](../../docs/GO_LIVE.md)) checks this automatically.
+
 ## Quick start (local)
 
 ```bash

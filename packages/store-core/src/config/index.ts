@@ -74,6 +74,7 @@ export {
 
 export {
   checkMainnetGoLive,
+  detectEphemeralHosting,
   type GoLiveCheck,
   type GoLiveEnv,
   type GoLiveResult,

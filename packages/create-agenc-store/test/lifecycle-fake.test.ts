@@ -213,6 +213,38 @@ describe("fake lifecycle: scaffold-config → listing → hire → activation-ca
     ).rejects.toThrow(/did not attest/i);
   });
 
+  it("the route refuses a task the store cannot verify (no hosting, no attestation)", async () => {
+    const hosting = createMemoryJobSpecStore({
+      publicBaseUrl: "http://localhost:3000/api/agenc/job-specs",
+    });
+    let attestorCalled = false;
+    const handler = createActivateJobSpecHandler({
+      storeJobSpec: hosting.storeJobSpec,
+      attestTaskModeration: async () => {
+        attestorCalled = true;
+        return { attested: true };
+      },
+      verifyTask: async () => ({ ok: false, reason: "task not found" }),
+    });
+    const host = createStoreActivationHost({
+      endpoint: "http://store.local/api/agenc/activate-job-spec",
+      fetch: (async (url: string | URL | Request, init?: RequestInit) =>
+        handler(new Request(url, init))) as typeof fetch,
+    });
+    await expect(
+      host({
+        taskPda: LISTING_PDA,
+        taskId: new Uint8Array(32).fill(3),
+        listing: LISTING_PDA,
+        jobSpec: buildListingJobSpec({ listingName: "X" }),
+        hireSignature: "sig",
+        referrerInjected: false,
+      }),
+    ).rejects.toThrow(/task verification failed/i);
+    expect(hosting.hosted.size).toBe(0);
+    expect(attestorCalled).toBe(false);
+  });
+
   it("the route rejects an oversized or malformed job spec before hashing", async () => {
     const hosting = createMemoryJobSpecStore({
       publicBaseUrl: "http://localhost:3000/api/agenc/job-specs",

@@ -26,6 +26,10 @@ export async function POST(request: Request): Promise<Response> {
   const handler = createActivateJobSpecHandler({
     storeJobSpec: backend.storeJobSpec,
     attestTaskModeration: backend.attestTaskModeration,
+    // The route is public by construction (the buyer's browser calls it):
+    // verify the task really exists on-chain and is awaiting activation
+    // before hosting or attesting anything.
+    verifyTask: backend.verifyTask,
   });
   return handler(request);
 }
