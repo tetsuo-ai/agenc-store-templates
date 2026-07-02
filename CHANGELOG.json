@@ -2,6 +2,13 @@
   "schema": "agenc.store-changelog/v1",
   "entries": [
     {
+      "version": "0.3.1",
+      "date": "2026-07-02",
+      "summary": "store-core: point the default marketplace-managed task-moderation attestor at the open WP-C1 service (https://attest.agenc.ag/api/task-moderation/attest) instead of the entitlement-gated marketplace.agenc.tech route, so a template-scaffolded store's hire→activation reaches moderation with zero configuration and no kit-entitlement headers. Sovereignty override (moderation.attestorEndpoint) unchanged. NOTE: the hosted endpoint records on-chain attestations once its signer key is provisioned; until then it returns clean verdicts with attested=false.",
+      "security": false,
+      "url": "https://github.com/tetsuo-ai/agenc-store-templates/releases/tag/v0.3.1"
+    },
+    {
       "version": "0.3.0",
       "date": "2026-07-02",
       "summary": "A1 client cutover (breaking against the pre-A1 program): pin sdk ^0.7.0 / react ^0.3.0 across store-core, all three templates, and the create-agenc-store scaffold output. The 2026-07-02 mainnet upgrade (WP-A1 roster moderation gates) added an optional moderation_attestor account to set_task_job_spec / hire_from_listing / hire_from_listing_humanless; stores built on sdk 0.6.x / react 0.2.x are rejected fail-closed by the deployed program on publish/hire — scaffold or upgrade to 0.3.0 immediately. No template or store-core source changes; pins, docs, and versions only.",
