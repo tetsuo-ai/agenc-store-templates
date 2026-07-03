@@ -33,5 +33,12 @@ export default defineConfig({
     "@solana/kit",
     "@solana/program-client-core",
     "zod",
+    // NEVER bundle react-query: a bundled copy carries its own React context,
+    // so `useChangelogFeed`'s `useQuery` cannot see the QueryClient that
+    // marketplace-react's AgencProvider provides — "No QueryClient set", and
+    // every page of every scaffolded store 500'd on SSR (cross-node canary
+    // finding #1, 2026-07-02). Declared in `dependencies` with the same range
+    // as marketplace-react so npm dedupes to ONE instance.
+    "@tanstack/react-query",
   ],
 });

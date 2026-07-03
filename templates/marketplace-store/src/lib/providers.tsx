@@ -37,11 +37,27 @@ import "@tetsuo-ai/marketplace-react/theme.css";
 import "@tetsuo-ai/marketplace-react/components.css";
 import { storeConfig } from "./config";
 
-/** Resolve the gPA RPC URL for the configured network. */
+/**
+ * Hosts that are JSON-RPC endpoints, not hosted indexers. A hosted mainnet
+ * RPC in `api.baseUrl` must route to the gPA read path — treating it as an
+ * indexer fires REST paths at a JSON-RPC server (403/404 and an empty
+ * catalog).
+ */
+const RPC_HOST_PATTERN =
+  /solana\.com|helius|rpcpool|quiknode|quicknode|alchemy|ankr|triton|syndica/i;
+
+/**
+ * Resolve the gPA/write RPC URL. `NEXT_PUBLIC_AGENC_RPC_URL` wins when set —
+ * the per-network public defaults commonly reject browser JSON-RPC on
+ * mainnet, so real deployments should provide their own endpoint.
+ */
 function rpcUrl(): string {
+  const override = process.env.NEXT_PUBLIC_AGENC_RPC_URL;
+  if (override) return override;
   const base = storeConfig.api.baseUrl;
   const isLocalRpc = base.includes("127.0.0.1") || base.includes("localhost");
   if (isLocalRpc) return base;
+  if (RPC_HOST_PATTERN.test(base)) return base;
   switch (storeConfig.network) {
     case "localnet":
       return "http://127.0.0.1:8899";
@@ -52,10 +68,11 @@ function rpcUrl(): string {
   }
 }
 
-/** Is `api.baseUrl` a real indexer (vs the bare RPC)? */
+/** Is `api.baseUrl` a real indexer (vs a local or hosted bare RPC)? */
 function indexerBaseUrl(): string | null {
   const base = storeConfig.api.baseUrl;
   if (base.includes("127.0.0.1") || base.includes("localhost")) return null;
+  if (RPC_HOST_PATTERN.test(base)) return null;
   return base;
 }
 
@@ -72,6 +89,10 @@ export function Providers({ children }: { children: ReactNode }) {
     if (indexer) {
       return {
         network: storeConfig.network,
+        // The WRITE client (and single-account reads like the WP-A1
+        // roster-attestor resolution) builds from rpcUrl — pass the working
+        // endpoint explicitly instead of the per-network default.
+        rpcUrl: rpcUrl(),
         indexer: { baseUrl: indexer, apiKey: storeConfig.api.apiKey },
         referrer,
       };
@@ -80,6 +101,7 @@ export function Providers({ children }: { children: ReactNode }) {
     // the `queryTransport` seam.
     return {
       network: storeConfig.network,
+      rpcUrl: rpcUrl(),
       queryTransport: createReadTransport({ rpc: createSolanaRpc(rpcUrl()) }),
       referrer,
     };
