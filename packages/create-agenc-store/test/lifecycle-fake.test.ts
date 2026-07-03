@@ -39,6 +39,8 @@ import type { ScaffoldOptions } from "../src/config.js";
 const TEST_REFERRER = "8iC21EoERDWSXRc5AH8fQBaV32pMSsAN3P7jumi15pH6";
 // Real base58 PDAs (shape-valid for the route's validation).
 const LISTING_PDA = "7RkbpXC7sPVNYSLVkaxChHgXNa4J8B4kgBhzRZzjTkHc";
+// The P1.2 moderator the fake attestor names (any base58 pubkey shape).
+const MODERATOR = "13tuj7ELwtHmeR22kvaSaa2pKqSscyoHtQBF65aHuo6v";
 
 const tmpDirs: string[] = [];
 afterAll(async () => {
@@ -138,7 +140,12 @@ describe("fake lifecycle: scaffold-config → listing → hire → activation-ca
       storeJobSpec: hosting.storeJobSpec,
       attestTaskModeration: async (input) => {
         attested.push(input);
-        return { attested: true, moderation: { status: "CLEAN" } };
+        // P1.2: real attestors name their signer in every response.
+        return {
+          attested: true,
+          moderator: MODERATOR,
+          moderation: { status: "CLEAN" },
+        };
       },
     });
     const host = createStoreActivationHost({
@@ -163,6 +170,9 @@ describe("fake lifecycle: scaffold-config → listing → hire → activation-ca
     expect(result.moderationAttested).toBe(true);
     expect(result.jobSpecHash).toBeInstanceOf(Uint8Array);
     expect(result.jobSpecHash).toHaveLength(32);
+    // P1.2: the moderator whose record the activation names — sourced from
+    // the attestation response, never guessed.
+    expect(result.moderator).toBe(MODERATOR);
     expect(result.jobSpecUri.length).toBeGreaterThan(0);
     expect(result.jobSpecUri.length).toBeLessThanOrEqual(256); // on-chain cap
 

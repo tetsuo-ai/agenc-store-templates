@@ -314,6 +314,16 @@ export const moderationSchema = z
       .string()
       .url("moderation.attestorEndpoint must be an absolute URL")
       .optional(),
+    /**
+     * OPTIONAL sovereignty override: the attestor's signer pubkey — the
+     * `moderator` named at the P1.2 consumption gates (`hire_from_listing*`,
+     * `set_task_job_spec`). Leave unset (the default): the store sources it
+     * from the attestation response (activation) and from the attestation
+     * service's `GET /v1/info` (hires). Set it ONLY when running an outdated
+     * self-hosted attestor (< agenc-moderation-api 0.2.1) that does not
+     * disclose its moderator itself.
+     */
+    moderator: base58Address.optional(),
   })
   .strict();
 

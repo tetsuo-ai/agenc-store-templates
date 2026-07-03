@@ -32,6 +32,7 @@ export {
   HireActivationButton,
   type HireActivationButtonProps,
   type HireLandedContext,
+  type StoreHireInput,
 } from "./HireActivationButton.js";
 export {
   TaskActivationRepair,

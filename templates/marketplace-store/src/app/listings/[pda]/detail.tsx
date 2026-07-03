@@ -22,9 +22,11 @@
  */
 "use client";
 import { useRouter } from "next/navigation";
-import { ListingDetailSection } from "@tetsuo-ai/store-core/sections";
+import {
+  ListingDetailSection,
+  type StoreHireInput,
+} from "@tetsuo-ai/store-core/sections";
 import type { HireCheckoutListing } from "@tetsuo-ai/marketplace-react";
-import type { HumanlessHireFlowHireInput } from "@tetsuo-ai/marketplace-react/hooks";
 import { addBuyerTask, markBuyerTaskActivated } from "@/lib/buyer-tasks";
 
 /** Buyer review window before auto-acceptance, in seconds (7 days). */
@@ -48,14 +50,18 @@ export function ListingDetail({ pda }: { pda: string }) {
       pda={pda}
       buildHireInput={(
         listing: HireCheckoutListing,
-      ): HumanlessHireFlowHireInput => ({
+      ): StoreHireInput => ({
         // Humanless storefront-visitor hire → CreatorReview settlement. The
         // buyer (`creator`) defaults to the connected wallet signer; the
-        // humanless flag + referrer are supplied by the flow/provider.
+        // humanless flag + referrer are supplied by the flow/provider, and the
+        // P1.2 `moderator` (whose listing attestation the hire gate consumes)
+        // is auto-resolved from the store's activation route.
         listing: listing.address,
         taskId: randomTaskId(),
         // Compare-and-swap guards derived from the decoded listing so a price /
         // version change between page load and confirm fails safely on-chain.
+        // `listingSpecHash` also derives the P1.2 moderation-record and
+        // BLOCK-floor accounts the hire gate requires.
         expectedPrice: listing.account.price,
         expectedVersion: listing.account.version,
         listingSpecHash: listing.account.specHash,

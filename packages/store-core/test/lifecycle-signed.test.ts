@@ -136,6 +136,11 @@ describe("signed store lifecycle (litesvm, real program)", () => {
         expectedVersion: 1n,
         reviewWindowSecs: 3600n,
         listingSpecHash: SPEC_HASH,
+        // P1.2: the hire gate names the moderator whose LISTING attestation
+        // it consumes — here the sandbox moderation authority that recorded
+        // the CLEAN attestation above (what the store sources from the
+        // attestation service's /v1/info in production).
+        moderator: market.moderator.address,
         // The provider-level injection pair — exactly what marketplace-react
         // spreads from AgencProvider's { referrer: { wallet, feeBps } } when
         // resolveReferrerCapability().live is true.
@@ -163,7 +168,13 @@ describe("signed store lifecycle (litesvm, real program)", () => {
             address(input.taskPda),
             values.hexToBytes(input.jobSpecHashHex),
           );
-          return { attested: true, txSignature: sent.signature };
+          // P1.2: name whoever just signed the record (what the deployed
+          // marketplace-managed attestor returns in its response).
+          return {
+            attested: true,
+            moderator: String(market.moderator.address),
+            txSignature: sent.signature,
+          };
         },
         // The deployed route verifies the task exists before hosting or
         // attesting anything (createRpcTaskVerifier); here the same seam is
@@ -197,6 +208,9 @@ describe("signed store lifecycle (litesvm, real program)", () => {
       });
       expect(moderation.moderationAttested).toBe(true);
       expect(moderation.jobSpecHash).toHaveLength(32);
+      // P1.2: the host surfaces the moderator whose record the activation
+      // consumes — exactly the signer of the attestation above.
+      expect(moderation.moderator).toBe(String(market.moderator.address));
       expect(moderation.jobSpecUri).toMatch(
         /^https:\/\/store\.example\.com\/api\/agenc\/job-specs\/[0-9a-f]{64}$/,
       );
@@ -211,12 +225,14 @@ describe("signed store lifecycle (litesvm, real program)", () => {
       );
       expect(recomputed.hex).toBe(values.bytesToHex(moderation.jobSpecHash));
 
-      // The buyer signs the activation — the flow's final leg.
+      // The buyer signs the activation — the flow's final leg — naming the
+      // moderator the host returned (the P1.2 record the gate consumes).
       await buyerClient.setTaskJobSpec({
         task: taskPda,
         creator: buyer,
         jobSpecHash: moderation.jobSpecHash,
         jobSpecUri: moderation.jobSpecUri,
+        moderator: address(moderation.moderator),
       });
 
       // ---- 4) The worker can NOW claim (job spec pinned), then submits ----

@@ -9,9 +9,10 @@
  * repairs exactly that state, and ONLY that state:
  *
  *   re-host + re-attest the job spec through the store's activation route
- *   (skipped when the hash/URI from the failed attempt are already known)
+ *   (skipped when the hash/URI/moderator from the failed attempt are already
+ *   known)
  *     → `set_task_job_spec` via `useTaskActivation` against the EXISTING
- *       task PDA.
+ *       task PDA, naming the P1.2 `moderator` whose attestation it consumes.
  *
  * It never hires: there is no code path here that can mint a second escrow.
  * Rendered inline by {@link HireActivationButton} after a failed activation,
@@ -23,6 +24,7 @@
  */
 "use client";
 import { useCallback, useRef, useState, type ReactElement } from "react";
+import { address } from "@solana/kit";
 import { Button } from "@tetsuo-ai/marketplace-react";
 import { useTaskActivation } from "@tetsuo-ai/marketplace-react/hooks";
 import {
@@ -44,6 +46,8 @@ export interface TaskActivationRepairResult {
   jobSpecHash: Uint8Array;
   /** The pinned hosted URI. */
   jobSpecUri: string;
+  /** The P1.2 moderator the activation named (whose record it consumed). */
+  moderator: string;
   /** Attestor detail passthrough (when the host leg ran). */
   moderation?: unknown;
 }
@@ -70,6 +74,12 @@ export interface TaskActivationRepairProps {
   jobSpecHashHex?: string | null;
   /** Known hosted URI from a prior attempt (skips re-hosting). */
   jobSpecUri?: string | null;
+  /**
+   * The P1.2 moderator from a prior successful host+attest leg. Re-hosting is
+   * skipped only when hash, URI, AND moderator are all known — the activation
+   * must name whoever signed the attestation record it consumes.
+   */
+  moderator?: string | null;
   /** The store's activation route. Defaults to the same-origin route. */
   activationEndpoint?: string;
   /** Called when the repair lands and the task is claimable. */
@@ -94,6 +104,7 @@ export function TaskActivationRepair({
   referrerInjected = false,
   jobSpecHashHex,
   jobSpecUri,
+  moderator,
   activationEndpoint = DEFAULT_ACTIVATION_ROUTE,
   onActivated,
   unstyled,
@@ -118,8 +129,9 @@ export function TaskActivationRepair({
           ? hexToBytes(jobSpecHashHex.toLowerCase())
           : null;
       let uri = jobSpecUri ?? null;
+      let recordModerator = moderator?.trim() || null;
       let moderation: unknown;
-      if (!hash || !uri) {
+      if (!hash || !uri || !recordModerator) {
         setHostPending(true);
         try {
           const host = createStoreActivationHost<StoreJobSpecDraft>({
@@ -139,17 +151,19 @@ export function TaskActivationRepair({
           });
           hash = result.jobSpecHash;
           uri = result.jobSpecUri;
+          recordModerator = result.moderator;
           moderation = result.moderation;
         } finally {
           setHostPending(false);
         }
       }
-      if (!hash || !uri) {
+      if (!hash || !uri || !recordModerator) {
         throw new Error("Activation host returned no job-spec pointer.");
       }
       const signature = await activation.activate({
         jobSpecHash: hash,
         jobSpecUri: uri,
+        moderator: address(recordModerator),
       } as Parameters<typeof activation.activate>[0]);
       setDone(true);
       onActivated?.({
@@ -157,6 +171,7 @@ export function TaskActivationRepair({
         activationSignature: signature,
         jobSpecHash: hash,
         jobSpecUri: uri,
+        moderator: recordModerator,
         moderation,
       });
     } catch (cause) {
@@ -174,6 +189,7 @@ export function TaskActivationRepair({
     jobSpecHashHex,
     jobSpecUri,
     listing,
+    moderator,
     onActivated,
     referrerInjected,
     taskIdHex,

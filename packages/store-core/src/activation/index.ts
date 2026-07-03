@@ -21,6 +21,7 @@ export {
 export {
   DEFAULT_ACTIVATION_ROUTE,
   createStoreActivationHost,
+  fetchStoreHireModerator,
   type StoreActivationHostInput,
   type StoreActivationHostResult,
   type StoreActivationHostOptions,

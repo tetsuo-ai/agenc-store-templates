@@ -8,8 +8,14 @@
  *   3. HOST the canonical JSON (file-backed by default, served back from the
  *      store's own `/api/agenc/job-specs/[hash]` route),
  *   4. obtain the CLEAN task-moderation attestation for `(task, hash)`,
- *   5. respond with `{ jobSpecHashHex, jobSpecUri, moderationAttested }` so the
- *      browser can sign `set_task_job_spec`.
+ *   5. respond with `{ jobSpecHashHex, jobSpecUri, moderationAttested,
+ *      moderator }` so the browser can sign `set_task_job_spec` naming the
+ *      P1.2 `moderator` whose record the gate consumes.
+ *
+ * The same handler also serves `GET` as the hire-moderator info leg
+ * (`{ moderator }`) — the pubkey the P1.2 HIRE gates name, sourced from the
+ * `moderation.moderator` config override or the attestation service's
+ * `GET /v1/info` (cached per process).
  *
  * ## Invisible-by-default (founder rule, 2026-07-01)
  *
@@ -237,6 +243,14 @@ export interface TaskModerationInput extends StoreJobSpecHostInput {
 export interface TaskModerationResult {
   /** True only when a CLEAN attestation was recorded for `(task, hash)`. */
   attested: boolean;
+  /**
+   * The pubkey that signed/recorded the attestation — the `moderator` the
+   * P1.2 `set_task_job_spec` gate must name (the record is seeded by
+   * `task + jobSpecHash + moderator`). `null`/absent when the attestor did
+   * not disclose it (an outdated service); the route then falls back to the
+   * `moderation.moderator` config override or fails closed.
+   */
+  moderator?: string | null;
   /** Attestor detail passthrough. */
   moderation?: unknown;
   /** The on-chain record signature, when the attestor broadcast one. */
@@ -305,6 +319,7 @@ export function createRemoteTaskModerationAttestor(config: {
 
     const body = (await response.json().catch(() => null)) as {
       attested?: boolean;
+      moderator?: string | null;
       moderation?: unknown;
       txSignature?: string | null;
       error?: string | { message?: string; reason?: string };
@@ -318,8 +333,22 @@ export function createRemoteTaskModerationAttestor(config: {
           : (err?.reason ?? err?.message ?? fallback),
       );
     }
+    // P1.2: the attestation response names the moderator whose on-chain record
+    // the activation gate consumes (top-level on agenc-moderation-api ≥ 0.2.1;
+    // tolerate a nested `moderation.moderator` detail shape too).
+    const nested =
+      body?.moderation && typeof body.moderation === "object"
+        ? (body.moderation as { moderator?: unknown }).moderator
+        : undefined;
+    const moderator =
+      typeof body?.moderator === "string" && body.moderator.trim()
+        ? body.moderator.trim()
+        : typeof nested === "string" && nested.trim()
+          ? nested.trim()
+          : null;
     return {
       attested: body?.attested === true,
+      moderator,
       moderation: body?.moderation ?? null,
       txSignature: body?.txSignature ?? null,
     };
@@ -375,6 +404,7 @@ export function createLocalSandboxTaskAttestor(config: {
     ]);
     return {
       attested: true,
+      moderator: String(signer.address),
       moderation: { source: "local-sandbox", status: "CLEAN" },
       txSignature: result.signature,
     };
@@ -511,6 +541,22 @@ export interface ActivateJobSpecHandlerDeps {
    */
   verifyTask?: VerifyTaskFn;
   /**
+   * Sovereignty fallback for the P1.2 `moderator` (the config field
+   * `moderation.moderator`). Used ONLY when the attestor's response does not
+   * name its moderator (an outdated self-hosted service); a moderator named
+   * in the attestation response always wins — the record consumed on-chain
+   * was written by whoever just signed it.
+   */
+  moderatorOverride?: string | undefined;
+  /**
+   * Resolves the moderator to name on HIRE-time gates
+   * (`hire_from_listing[_humanless]`), served on `GET` as `{ moderator }` so
+   * the browser can source it before any attestation response exists.
+   * {@link resolveActivationBackend} wires the config-override → attestor
+   * `GET /v1/info` chain; omit to keep the route POST-only.
+   */
+  resolveHireModerator?: (() => Promise<string>) | undefined;
+  /**
    * Per-client rate limit. Defaults to
    * {@link DEFAULT_ACTIVATION_RATE_LIMIT}; pass `false` to disable (tests).
    */
@@ -526,6 +572,8 @@ export interface ActivateJobSpecResponse {
   jobSpecHashHex: string;
   jobSpecUri: string;
   moderationAttested: boolean;
+  /** The P1.2 moderator whose task-moderation record the activation consumes. */
+  moderator: string;
   moderation?: unknown;
   txSignature?: string | null;
 }
@@ -568,6 +616,8 @@ export function createActivateJobSpecHandler({
   storeJobSpec,
   attestTaskModeration,
   verifyTask,
+  moderatorOverride,
+  resolveHireModerator,
   rateLimit = DEFAULT_ACTIVATION_RATE_LIMIT,
   maxRequestBytes = DEFAULT_MAX_REQUEST_BYTES,
   maxCanonicalBytes = DEFAULT_MAX_CANONICAL_BYTES,
@@ -576,6 +626,24 @@ export function createActivateJobSpecHandler({
     rateLimit === false ? null : createFixedWindowRateLimiter(rateLimit);
 
   return async function activateJobSpec(request: Request): Promise<Response> {
+    // GET = the hire-moderator info leg (P1.2): the browser needs a moderator
+    // pubkey for the hire gates BEFORE any attestation response exists.
+    if (request.method === "GET" && resolveHireModerator) {
+      try {
+        const moderator = await resolveHireModerator();
+        return json({ moderator });
+      } catch (cause) {
+        return json(
+          {
+            error:
+              cause instanceof Error
+                ? cause.message
+                : "Hire moderator could not be resolved.",
+          },
+          502,
+        );
+      }
+    }
     if (request.method && request.method !== "POST") {
       return json({ error: "Method not allowed." }, 405);
     }
@@ -710,10 +778,36 @@ export function createActivateJobSpecHandler({
       );
     }
 
+    // P1.2 fail-closed moderator sourcing: PREFER the attestation response's
+    // moderator (the on-chain record consumed by `set_task_job_spec` was
+    // written by whoever just signed it); fall back to the explicit config
+    // override; NEVER guess. Without a moderator the activation transaction
+    // cannot name the record and would fail on-chain anyway — surface the
+    // actionable reason here instead.
+    const moderator =
+      typeof moderation.moderator === "string" && moderation.moderator.trim()
+        ? moderation.moderator.trim()
+        : (moderatorOverride?.trim() ?? "");
+    if (!PDA_RE.test(moderator)) {
+      return json(
+        {
+          error:
+            "Task moderation attested this spec but named no moderator pubkey " +
+            "(required by the P1.2 gates). The attestation service looks " +
+            "outdated — upgrade it to agenc-moderation-api >= 0.2.1, or set " +
+            "moderation.moderator in agenc.config.ts to your attestor's " +
+            "signer pubkey.",
+          moderation: moderation.moderation ?? null,
+        },
+        502,
+      );
+    }
+
     const response: ActivateJobSpecResponse = {
       jobSpecHashHex,
       jobSpecUri: stored.uri,
       moderationAttested: true,
+      moderator,
       moderation: moderation.moderation ?? null,
       txSignature: moderation.txSignature ?? null,
     };
@@ -753,6 +847,17 @@ export interface ActivationBackend {
   attestTaskModeration: AttestTaskModerationFn;
   /** Task-existence verification for the route (RPC-backed by default). */
   verifyTask: VerifyTaskFn;
+  /**
+   * The explicit `moderation.moderator` config override (P1.2), or undefined.
+   * The route uses it ONLY when the attestation response names no moderator.
+   */
+  moderatorOverride: string | undefined;
+  /**
+   * Resolves the moderator pubkey the HIRE gates name (P1.2), for the route's
+   * GET leg: the config override when set, else the attestation service's
+   * `GET /v1/info` (cached per process), else the localnet sandbox key.
+   */
+  resolveHireModerator: () => Promise<string>;
   /** Where hosted specs are written (for the GET route). */
   jobSpecDirectory: string;
   /** Which attestor was resolved (observability, not behavior). */
@@ -792,6 +897,81 @@ function defaultLocalnetModeratorKeyPath(env: ActivationEnv): string {
   const protocolDir =
     env.AGENC_PROTOCOL_DIR ?? path.resolve(process.cwd(), "../../agenc-protocol");
   return path.join(protocolDir, ".localnet/keys/moderator.json");
+}
+
+/**
+ * Derive an attestation service's `GET /v1/info` URL from its attest endpoint
+ * (e.g. `https://attest.agenc.ag/api/task-moderation/attest` →
+ * `https://attest.agenc.ag/v1/info`). Self-hosted attestors mounted under a
+ * subpath should set `moderation.moderator` explicitly instead.
+ */
+export function attestorInfoUrl(attestorEndpoint: string): string {
+  return `${new URL(attestorEndpoint).origin}/v1/info`;
+}
+
+/** Per-process cache for attestor `GET /v1/info` moderator lookups. */
+const hireModeratorCache = new Map<
+  string,
+  { moderator: string; expiresAt: number }
+>();
+const HIRE_MODERATOR_CACHE_TTL_MS = 5 * 60_000;
+
+/**
+ * Fetch the attestation service's signer pubkey (`moderator`) from its
+ * `GET /v1/info` — the P1.2 moderator the HIRE gates name when no fresh
+ * attestation response exists yet. Cached per process (short TTL so a key
+ * rotation converges). Fails CLOSED with the actionable reason: naming a
+ * wrong/guessed moderator would just fail on-chain with a worse error.
+ */
+export async function fetchAttestorModerator(config: {
+  /** The attest endpoint (the info URL derives from its origin). */
+  attestorEndpoint: string;
+  fetch?: typeof fetch;
+  timeoutMs?: number;
+}): Promise<string> {
+  const infoUrl = attestorInfoUrl(config.attestorEndpoint);
+  const cached = hireModeratorCache.get(infoUrl);
+  if (cached && cached.expiresAt > Date.now()) return cached.moderator;
+
+  const fetchImpl = config.fetch ?? globalThis.fetch;
+  const timeoutMs = config.timeoutMs ?? 10_000;
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+  let body: { moderator?: unknown } | null = null;
+  try {
+    const response = await fetchImpl(infoUrl, { signal: controller.signal });
+    if (!response.ok) {
+      throw new Error(
+        `Attestation service info endpoint failed (${response.status} from ${infoUrl}).`,
+      );
+    }
+    body = (await response.json().catch(() => null)) as {
+      moderator?: unknown;
+    } | null;
+  } catch (cause) {
+    if (controller.signal.aborted) {
+      throw new Error(`Attestation service info endpoint timed out (${infoUrl}).`);
+    }
+    throw cause;
+  } finally {
+    clearTimeout(timeout);
+  }
+  const moderator =
+    typeof body?.moderator === "string" && body.moderator.trim()
+      ? body.moderator.trim()
+      : null;
+  if (!moderator || !PDA_RE.test(moderator)) {
+    throw new Error(
+      `Attestation service at ${infoUrl} exposes no moderator pubkey (P1.2). ` +
+        "Upgrade it to agenc-moderation-api >= 0.2.1, or set " +
+        "moderation.moderator in agenc.config.ts to your attestor's signer pubkey.",
+    );
+  }
+  hireModeratorCache.set(infoUrl, {
+    moderator,
+    expiresAt: Date.now() + HIRE_MODERATOR_CACHE_TTL_MS,
+  });
+  return moderator;
 }
 
 /**
@@ -844,9 +1024,29 @@ export function resolveActivationBackend(
     rpcUrl: env.AGENC_RPC_URL ?? defaultRpcUrlForNetwork(config.network),
   });
 
+  // P1.2 moderator sourcing for the HIRE gates (the route's GET leg):
+  // (a) the explicit config override, else (c) the attestation service's
+  // GET /v1/info (cached) — on localnet, the sandbox moderation key itself.
+  const moderatorOverride = config.moderation?.moderator;
+  const attestorEndpointForInfo =
+    config.moderation?.attestorEndpoint ?? DEFAULT_TASK_ATTESTOR_ENDPOINT;
+  const resolveHireModerator = async (): Promise<string> => {
+    if (moderatorOverride) return moderatorOverride;
+    if (config.network === "localnet" && !config.moderation?.attestorEndpoint) {
+      const keyPath =
+        env.AGENC_MODERATOR_KEYPAIR ?? defaultLocalnetModeratorKeyPath(env);
+      const raw = JSON.parse(await readFile(keyPath, "utf8")) as number[];
+      const signer = await createKeyPairSignerFromBytes(Uint8Array.from(raw));
+      return String(signer.address);
+    }
+    return fetchAttestorModerator({ attestorEndpoint: attestorEndpointForInfo });
+  };
+
   const base = {
     storeJobSpec,
     verifyTask,
+    moderatorOverride,
+    resolveHireModerator,
     jobSpecDirectory,
     hosting,
     hostingIssue,
