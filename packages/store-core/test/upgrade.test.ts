@@ -95,3 +95,46 @@ describe("summarizeFeed", () => {
     expect(summary.securityVersions).toEqual([]);
   });
 });
+
+// ---------------------------------------------------------------------------
+// Cross-node canary regressions (2026-07-02)
+// ---------------------------------------------------------------------------
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+import { STORE_CORE_VERSION } from "../src/upgrade/index.js";
+
+describe("STORE_CORE_VERSION", () => {
+  it("always equals the package.json version (was hardcoded '0.1.0' inside 0.3.x)", () => {
+    // REVERT-SENSITIVE: against the pre-fix source this fails — the constant
+    // was a hardcoded "0.1.0" that drifted from every published version, so
+    // the staleness banner compared against a fiction.
+    const pkg = JSON.parse(
+      readFileSync(
+        fileURLToPath(new URL("../package.json", import.meta.url)),
+        "utf8",
+      ),
+    ) as { version: string };
+    expect(STORE_CORE_VERSION).toBe(pkg.version);
+  });
+});
+
+describe("react-query must never be bundled", () => {
+  it("tsup externalizes @tanstack/react-query and package.json declares it", async () => {
+    // REVERT-SENSITIVE: against the pre-fix tsup config this fails. A bundled
+    // react-query copy carries its own React context, so useChangelogFeed's
+    // useQuery could not see AgencProvider's QueryClient ("No QueryClient
+    // set") and every page of every scaffolded store 500'd on SSR.
+    const tsupSource = readFileSync(
+      fileURLToPath(new URL("../tsup.config.ts", import.meta.url)),
+      "utf8",
+    );
+    expect(tsupSource).toContain('"@tanstack/react-query"');
+    const pkg = JSON.parse(
+      readFileSync(
+        fileURLToPath(new URL("../package.json", import.meta.url)),
+        "utf8",
+      ),
+    ) as { dependencies?: Record<string, string> };
+    expect(pkg.dependencies?.["@tanstack/react-query"]).toBeTruthy();
+  });
+});

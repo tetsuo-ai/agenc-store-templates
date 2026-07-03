@@ -11,8 +11,15 @@
  * @module upgrade/staleness
  */
 
-/** The `store-core` version this build was compiled against. */
-export const STORE_CORE_VERSION = "0.1.0";
+import packageJson from "../../package.json";
+
+/**
+ * The `store-core` version this build was compiled against — sourced from
+ * package.json at build time so it can never drift from the published
+ * version (it previously hardcoded "0.1.0" inside the 0.3.x package, making
+ * the staleness banner compare against a fiction).
+ */
+export const STORE_CORE_VERSION: string = packageJson.version;
 
 /**
  * The on-chain surface revision this build targets. A PLACEHOLDER until P6.5
