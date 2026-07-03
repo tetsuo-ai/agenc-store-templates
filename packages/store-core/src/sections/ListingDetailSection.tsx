@@ -28,12 +28,12 @@ import {
 import {
   useAgentTrackRecord,
   useListing,
-  type HumanlessHireFlowHireInput,
   type HumanlessHireFlowResult,
 } from "@tetsuo-ai/marketplace-react/hooks";
 import {
   HireActivationButton,
   type HireActivationButtonProps,
+  type StoreHireInput,
 } from "./HireActivationButton.js";
 import type { StoreJobSpecDraft } from "../activation/index.js";
 
@@ -44,9 +44,11 @@ export interface ListingDetailSectionProps {
   /**
    * Build the per-hire input from the listing (compare-and-swap guards, fresh
    * taskId, review window). Forwarded to the hire→activation flow; the
-   * referrer is auto-injected by the provider whenever one is configured.
+   * referrer is auto-injected by the provider whenever one is configured, and
+   * the P1.2 `moderator` is auto-resolved from the store's activation route
+   * when the input does not carry one.
    */
-  buildHireInput: (listing: HireCheckoutListing) => HumanlessHireFlowHireInput;
+  buildHireInput: (listing: HireCheckoutListing) => StoreHireInput;
   /**
    * Build the job-spec draft pinned after the hire. Defaults to the
    * "as listed" spec derived from the listing.

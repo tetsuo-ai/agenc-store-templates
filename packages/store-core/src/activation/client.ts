@@ -50,6 +50,13 @@ export interface StoreActivationHostResult {
   jobSpecUri: string;
   /** MUST be true or the flow refuses to sign the activation. */
   moderationAttested: boolean;
+  /**
+   * The pubkey that signed the task-moderation attestation — the P1.2
+   * `moderator` the activation transaction names (the on-chain record is
+   * seeded by `task + jobSpecHash + moderator`). Required: the flow refuses
+   * to sign without it.
+   */
+  moderator: string;
   /** Attestor detail passthrough (risk score, tx signature, …). */
   moderation?: unknown;
 }
@@ -67,9 +74,13 @@ interface ActivationRouteResponse {
   jobSpecHashHex?: string;
   jobSpecUri?: string;
   moderationAttested?: boolean;
+  moderator?: string;
   moderation?: unknown;
   error?: string;
 }
+
+/** Base58 pubkey shape (the moderator must be a real address, never guessed). */
+const PUBKEY_RE = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/;
 
 /**
  * Build the `hostAndModerateJobSpec` seam for `useHumanlessHireFlow`.
@@ -119,11 +130,69 @@ export function createStoreActivationHost<TJobSpec = StoreJobSpecDraft>(
     if (!body.jobSpecUri) {
       throw new Error("Activation route returned no jobSpecUri.");
     }
+    if (typeof body.moderator !== "string" || !PUBKEY_RE.test(body.moderator)) {
+      // Fail CLOSED (P1.2): without the moderator the activation cannot name
+      // the attestation record it consumes. Never guess one.
+      throw new Error(
+        "Activation route returned no moderator pubkey (required by the P1.2 " +
+          "gates). Update @tetsuo-ai/store-core and, if self-hosting the " +
+          "attestor, upgrade it to agenc-moderation-api >= 0.2.1 or set " +
+          "moderation.moderator in agenc.config.ts.",
+      );
+    }
     return {
       jobSpecHash: hexToBytes(body.jobSpecHashHex.toLowerCase()),
       jobSpecUri: body.jobSpecUri,
       moderationAttested: body.moderationAttested === true,
+      moderator: body.moderator,
       moderation: body.moderation ?? null,
     };
   };
+}
+
+/** Per-session cache for {@link fetchStoreHireModerator} (keyed by endpoint). */
+const hireModeratorCache = new Map<string, string>();
+
+/**
+ * Resolve the moderator pubkey the P1.2 HIRE gates name
+ * (`hire_from_listing[_humanless]`), for flows where no fresh attestation
+ * response exists yet: `GET` the store's own activation route, which sources
+ * it server-side from the `moderation.moderator` config override or the
+ * attestation service's `GET /v1/info`. Cached per session — the store's
+ * attestor signer does not change mid-session.
+ *
+ * @param options - Endpoint / fetch overrides ({@link StoreActivationHostOptions}).
+ * @returns The base58 moderator pubkey. Throws (fail-closed) when the store
+ *   cannot name one — a guessed moderator would only fail on-chain later.
+ */
+export async function fetchStoreHireModerator(
+  options: StoreActivationHostOptions = {},
+): Promise<string> {
+  const endpoint = options.endpoint ?? DEFAULT_ACTIVATION_ROUTE;
+  const cached = hireModeratorCache.get(endpoint);
+  if (cached) return cached;
+  const fetchImpl = options.fetch ?? globalThis.fetch;
+  const response = await fetchImpl(endpoint, { method: "GET" });
+  const body = (await response.json().catch(() => null)) as {
+    moderator?: unknown;
+    error?: string;
+  } | null;
+  if (!response.ok) {
+    throw new Error(
+      body?.error ??
+        `Hire moderator lookup failed (${response.status}). The store's activation route could not name the P1.2 moderator.`,
+    );
+  }
+  const moderator =
+    typeof body?.moderator === "string" ? body.moderator.trim() : "";
+  if (!PUBKEY_RE.test(moderator)) {
+    throw new Error(
+      "The store's activation route returned no moderator pubkey (required " +
+        "by the P1.2 hire gates). Update @tetsuo-ai/store-core and your " +
+        "attestation service (agenc-moderation-api >= 0.2.1), or set " +
+        "moderation.moderator in agenc.config.ts.",
+    );
+  }
+  hireModeratorCache.set(endpoint, moderator);
+  return moderator;
 }

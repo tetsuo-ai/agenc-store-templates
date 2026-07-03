@@ -70,4 +70,15 @@ export default defineStore({
     sitemap: true,
     llmsTxt: true,
   },
+
+  // Moderation is INVISIBLE BY DEFAULT — no setup: attestation (and the P1.2
+  // `moderator` pubkey the hire/activation gates name) is sourced from the
+  // marketplace-managed attestation service automatically. Both fields below
+  // are sovereignty overrides for operators running their OWN attestor:
+  // moderation: {
+  //   attestorEndpoint: "https://attestor.example.com/api/task-moderation/attest",
+  //   // Only for an OUTDATED self-hosted attestor (< agenc-moderation-api
+  //   // 0.2.1) that doesn't disclose its own signer pubkey:
+  //   // moderator: "YourAttestorSignerPubkey...",
+  // },
 });

@@ -38,6 +38,7 @@ import {
   useState,
   type ReactElement,
 } from "react";
+import { address } from "@solana/kit";
 import {
   Button,
   HireCheckoutModal,
@@ -50,6 +51,7 @@ import {
   useTaskActivation,
   useWalletSigner,
   type HumanlessHireFlowHireInput,
+  type HumanlessHireFlowModerationResult,
   type HumanlessHireFlowResult,
 } from "@tetsuo-ai/marketplace-react/hooks";
 import {
@@ -57,9 +59,22 @@ import {
   bytesToHex,
   createStoreActivationHost,
   DEFAULT_ACTIVATION_ROUTE,
+  fetchStoreHireModerator,
   type StoreJobSpecDraft,
 } from "../activation/index.js";
 import { TaskActivationRepair } from "./TaskActivationRepair.js";
+
+/**
+ * The template-side hire input: `HumanlessHireFlowHireInput` with the P1.2
+ * `moderator` OPTIONAL. When absent (the default for templates), the button
+ * resolves it from the store's activation route (`GET` → the config override
+ * or the attestation service's `/v1/info`, cached per session) before hiring —
+ * the hire gate consumes the listing attestation recorded by that moderator.
+ */
+export type StoreHireInput = Omit<HumanlessHireFlowHireInput, "moderator"> & {
+  /** Explicit P1.2 moderator override; auto-resolved when omitted. */
+  moderator?: HumanlessHireFlowHireInput["moderator"];
+};
 
 /**
  * Context handed to `onHired` alongside the task PDA — everything a template
@@ -88,6 +103,8 @@ interface StrandedHire {
   /** Set when the moderation leg succeeded but `set_task_job_spec` failed. */
   jobSpecHash: Uint8Array | null;
   jobSpecUri: string | null;
+  /** The P1.2 moderator of the successful moderation leg (retry shortcut). */
+  moderator: string | null;
 }
 
 /** Props for {@link HireActivationButton}. */
@@ -97,9 +114,11 @@ export interface HireActivationButtonProps {
   /**
    * Build the per-hire input (fresh 32-byte `taskId` + the compare-and-swap
    * guards) from the listing. The humanless/creator/referrer legs are supplied
-   * by the flow + provider context — never by this input.
+   * by the flow + provider context — never by this input. The P1.2
+   * `moderator` is optional here: when omitted the button resolves it from
+   * the store's activation route before hiring.
    */
-  buildHireInput: (listing: HireCheckoutListing) => HumanlessHireFlowHireInput;
+  buildHireInput: (listing: HireCheckoutListing) => StoreHireInput;
   /**
    * Build the job-spec draft hosted + attested + pinned for this hire.
    * Defaults to the "as listed" spec derived from the listing.
@@ -190,6 +209,10 @@ export function HireActivationButton({
   const strandedRef = useRef<StrandedHire | null>(null);
   // The moderation detail of a successful retry (for onActivated passthrough).
   const retryModerationRef = useRef<unknown>(null);
+  // The P1.2 moderator returned by the LAST successful host+attest leg — the
+  // flow does not publish it through progress, so the host wrapper records it
+  // here for the stranded-hire retry paths.
+  const lastModeratorRef = useRef<string | null>(null);
 
   // Host+attest state of the RETRY path (the set_task_job_spec leg is the
   // useTaskActivation hook below, which carries its own status/error).
@@ -227,6 +250,7 @@ export function HireActivationButton({
         ? new Uint8Array(progressJobSpecHash as unknown as ArrayLike<number>)
         : null,
       jobSpecUri: progressJobSpecUri ?? null,
+      moderator: lastModeratorRef.current,
     };
     strandedRef.current = next;
     setStranded(next);
@@ -263,10 +287,13 @@ export function HireActivationButton({
       try {
         let jobSpecHash = target.jobSpecHash;
         let jobSpecUri = target.jobSpecUri;
-        if (!jobSpecHash || !jobSpecUri) {
+        let moderator = target.moderator;
+        if (!jobSpecHash || !jobSpecUri || !moderator) {
           // Re-run the host+attest leg for the SAME task. Idempotent: the
           // canonical draft re-hashes identically, so the route re-hosts the
-          // same document and re-requests the attestation.
+          // same document and re-requests the attestation. Also the P1.2
+          // moderator source of truth — whoever signs THIS attestation is
+          // whose record `set_task_job_spec` consumes.
           setRetryHostPending(true);
           try {
             const host = createStoreActivationHost<StoreJobSpecDraft>({
@@ -283,11 +310,14 @@ export function HireActivationButton({
             });
             jobSpecHash = moderation.jobSpecHash;
             jobSpecUri = moderation.jobSpecUri;
+            moderator = moderation.moderator;
+            lastModeratorRef.current = moderator;
             retryModerationRef.current = moderation.moderation;
             const updated: StrandedHire = {
               ...target,
               jobSpecHash,
               jobSpecUri,
+              moderator,
             };
             strandedRef.current = updated;
             setStranded(updated);
@@ -295,12 +325,13 @@ export function HireActivationButton({
             setRetryHostPending(false);
           }
         }
-        if (!jobSpecHash || !jobSpecUri) {
+        if (!jobSpecHash || !jobSpecUri || !moderator) {
           throw new Error("Activation host returned no job-spec pointer.");
         }
         const signature = await activation.activate({
           jobSpecHash,
           jobSpecUri,
+          moderator: address(moderator),
         } as Parameters<typeof activation.activate>[0]);
         // Activation repaired — the task is claimable; nothing is stranded.
         clearStranded();
@@ -355,18 +386,47 @@ export function HireActivationButton({
       activation.reset();
       setRetryHostError(null);
       retryModerationRef.current = null;
+      lastModeratorRef.current = null;
       const hireInput = buildHireInput(listing);
       const jobSpec = (buildJobSpec ?? defaultJobSpec)(listing);
       attemptRef.current = {
         taskId: Uint8Array.from(hireInput.taskId as ArrayLike<number>),
         jobSpec,
       };
+      // P1.2: the hire gate names the moderator whose LISTING attestation it
+      // consumes. Resolve it BEFORE any money moves — explicit input override
+      // first, else the store's activation route (config override → the
+      // attestation service's /v1/info, cached per session). Fail-closed: a
+      // resolution failure aborts HERE, before the escrow is funded (and is
+      // surfaced through state — it happens outside the flow mutation, so the
+      // flow's own error state never sees it).
+      let hireModerator: HumanlessHireFlowHireInput["moderator"];
+      try {
+        hireModerator =
+          hireInput.moderator ??
+          address(
+            await fetchStoreHireModerator({ endpoint: activationEndpoint }),
+          );
+      } catch (cause) {
+        setRetryHostError(
+          cause instanceof Error ? cause : new Error(String(cause)),
+        );
+        return;
+      }
+      // Wrap the host to capture the task-attestation moderator for the
+      // stranded-hire retry paths (the flow consumes it internally but does
+      // not publish it through progress).
+      const host = createStoreActivationHost<StoreJobSpecDraft>({
+        endpoint: activationEndpoint,
+      });
       const result = await flow.hireAndActivate({
-        hire: hireInput,
+        hire: { ...hireInput, moderator: hireModerator },
         jobSpec,
-        hostAndModerateJobSpec: createStoreActivationHost<StoreJobSpecDraft>({
-          endpoint: activationEndpoint,
-        }),
+        hostAndModerateJobSpec: async (input) => {
+          const moderation = await host(input);
+          lastModeratorRef.current = moderation.moderator;
+          return moderation as unknown as HumanlessHireFlowModerationResult;
+        },
       });
       clearStranded();
       if (hiredNotified.current !== String(result.taskPda)) {
@@ -459,6 +519,7 @@ export function HireActivationButton({
             stranded.jobSpecHash ? bytesToHex(stranded.jobSpecHash) : null
           }
           jobSpecUri={stranded.jobSpecUri}
+          moderator={stranded.moderator}
           activationEndpoint={activationEndpoint}
           onActivated={(repair) => {
             clearStranded();
