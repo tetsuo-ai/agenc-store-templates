@@ -52,9 +52,19 @@ export default defineStore({
 
 `listingJsonLd` / `storeJsonLd` (schema.org Service/Offer), `storeMetadata` /
 `listingMetadata` (OG/canonical), `buildSitemapEntries` / `renderSitemapXml` /
-`buildRobotsTxt`, `listingAgentCard` / `buildLlmsTxt`, and `storeSeoContext`.
+`buildRobotsTxt`, `listingAgentCard` / `parseAgentCard` / `buildLlmsTxt`, and
+`storeSeoContext`.
 The AgentCard schema is **`agenc.agentCard.v1`** — unified with agenc.ag's
 production agent-card route, so one crawler shape covers every AgenC surface.
+The shape is defined once (WP-F4) as the JSON Schema document served at
+<https://agenc.ag/schemas/agenc.agentCard.v1.json>; this package vendors a
+byte-identical copy at `schemas/agenc.agentCard.v1.json`, guarded by a
+byte-equality fixture test (the sharing mechanism until the two repos share a
+schema package). `parseAgentCard` reads untrusted card JSON: it accepts the
+unified id, plus — deprecated, through 0.5.x only (removal: 0.6.0, per
+agenc-protocol `docs/VERSIONING.md`) — the pre-unification
+`agenc.agent-card/v1` shape, up-converted so callers only ever see (and
+re-emit) the unified shape.
 
 ### `sections` — the shared page components (C3)
 

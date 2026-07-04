@@ -4,8 +4,17 @@
  *
  * The AgentCard schema is `agenc.agentCard.v1` — the SAME schema agenc.ag's
  * production `/listings/[pda]/agent-card.json` route emits, so a crawler that
- * understands one AgenC surface understands every store. (The pre-unification
- * `agenc.agent-card/v1` shape is gone; WP-B1 picked ONE schema.)
+ * understands one AgenC surface understands every store. The shape is defined
+ * ONCE (WP-F4) as the JSON Schema document served at
+ * {@link AGENT_CARD_SCHEMA_URL} and vendored byte-identically into this
+ * package at `schemas/agenc.agentCard.v1.json` (guarded by a byte-equality
+ * fixture test — the sharing mechanism until a shared schema package exists).
+ *
+ * Emit is ALWAYS the unified id. The pre-unification `agenc.agent-card/v1`
+ * id/shape (WP-B1 removed the emitter) is still ACCEPTED on read by
+ * {@link parseAgentCard} for one minor version — deprecated, removal in
+ * store-core 0.6.0 per the deprecation conventions in agenc-protocol
+ * docs/VERSIONING.md.
  *
  * - `llms.txt` is a plain-text manifest pointing crawlers at the catalog and
  *   each listing's detail/AgentCard URL.
@@ -20,6 +29,21 @@ import { absoluteUrl, lamportsToSol, listingPath } from "./url.js";
 
 /** The unified AgentCard schema marker (matches agenc.ag production). */
 export const AGENT_CARD_SCHEMA = "agenc.agentCard.v1" as const;
+
+/**
+ * The canonical URL of the `agenc.agentCard.v1` JSON Schema document — the
+ * single definition of the card shape. This package vendors a byte-identical
+ * copy at `schemas/agenc.agentCard.v1.json`.
+ */
+export const AGENT_CARD_SCHEMA_URL =
+  "https://agenc.ag/schemas/agenc.agentCard.v1.json" as const;
+
+/**
+ * @deprecated The pre-unification store-core schema id. Accepted on READ by
+ * {@link parseAgentCard} through store-core 0.5.x only (removal: 0.6.0, per
+ * agenc-protocol docs/VERSIONING.md deprecation conventions). Never emitted.
+ */
+export const AGENT_CARD_LEGACY_SCHEMA = "agenc.agent-card/v1" as const;
 
 /** The price shape of an {@link AgentCard} (SOL or SPL-token pricing). */
 export type AgentCardPrice =
@@ -229,4 +253,140 @@ export function buildLlmsTxt(
   );
   lines.push("");
   return `${lines.join("\n")}\n`;
+}
+
+// ---------------------------------------------------------------------------
+// Reading cards (WP-F4): unified id always; legacy id accepted, up-converted
+// ---------------------------------------------------------------------------
+
+/**
+ * The pre-unification `agenc.agent-card/v1` wire shape, kept ONLY so
+ * {@link parseAgentCard} can up-convert cards emitted by pre-WP-B1 stores
+ * still deployed in the wild.
+ *
+ * @deprecated Read-only compatibility shape; removal with
+ * {@link AGENT_CARD_LEGACY_SCHEMA} in store-core 0.6.0.
+ */
+interface LegacyAgentCard {
+  schema: typeof AGENT_CARD_LEGACY_SCHEMA;
+  pda: string;
+  name: string;
+  category?: string;
+  tags?: string[];
+  description?: string;
+  price: { sol: string; lamports: string; mint: string | null };
+  provider?: string;
+  url: string;
+  action: { type: "hire"; href: string };
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+
+function isStringArray(value: unknown): value is string[] {
+  return Array.isArray(value) && value.every((item) => typeof item === "string");
+}
+
+function isUnifiedPrice(value: unknown): value is AgentCardPrice {
+  if (!isRecord(value)) return false;
+  if (value.currency === "SOL") return typeof value.amount === "string";
+  if (value.currency === "SPL_TOKEN") {
+    return typeof value.amountRaw === "string" && typeof value.mint === "string";
+  }
+  return false;
+}
+
+function isUnifiedAgentCard(value: Record<string, unknown>): value is Record<string, unknown> & AgentCard {
+  const hireability = value.hireability;
+  const store = value.store;
+  return (
+    value.schema === AGENT_CARD_SCHEMA &&
+    typeof value.id === "string" &&
+    typeof value.url === "string" &&
+    typeof value.name === "string" &&
+    (typeof value.description === "string" || value.description === null) &&
+    typeof value.metadataState === "string" &&
+    (typeof value.category === "string" || value.category === null) &&
+    isStringArray(value.tags) &&
+    isStringArray(value.deliverables) &&
+    isStringArray(value.buyerInputs) &&
+    isStringArray(value.examples) &&
+    (typeof value.sla === "string" || value.sla === null) &&
+    isUnifiedPrice(value.price) &&
+    (typeof value.providerAgent === "string" || value.providerAgent === null) &&
+    (store === null ||
+      (isRecord(store) &&
+        typeof store.handle === "string" &&
+        typeof store.title === "string" &&
+        typeof store.url === "string" &&
+        typeof store.referrerFeeBps === "number")) &&
+    isRecord(hireability) &&
+    typeof hireability.uiState === "string" &&
+    typeof hireability.hireable === "boolean" &&
+    isStringArray(hireability.blockers)
+  );
+}
+
+function isLegacyAgentCard(value: Record<string, unknown>): value is Record<string, unknown> & LegacyAgentCard {
+  const price = value.price;
+  return (
+    value.schema === AGENT_CARD_LEGACY_SCHEMA &&
+    typeof value.pda === "string" &&
+    typeof value.name === "string" &&
+    typeof value.url === "string" &&
+    isRecord(price) &&
+    typeof price.sol === "string" &&
+    typeof price.lamports === "string" &&
+    (typeof price.mint === "string" || price.mint === null)
+  );
+}
+
+/**
+ * Parse an untrusted value as an agent card (WP-F4 read path).
+ *
+ * Accepts the unified `agenc.agentCard.v1` shape, and — DEPRECATED, through
+ * store-core 0.5.x only (removal: 0.6.0, per agenc-protocol
+ * docs/VERSIONING.md) — the pre-unification `agenc.agent-card/v1` shape,
+ * which is up-converted so callers only ever see the unified shape. The
+ * returned card ALWAYS carries `schema: "agenc.agentCard.v1"`; re-emitting a
+ * parsed card therefore always emits the unified id.
+ *
+ * @param value - The untrusted JSON value (e.g. a fetched agent-card body).
+ * @returns The unified {@link AgentCard}, or null when the value is neither
+ *   a structurally valid unified card nor a structurally valid legacy card.
+ */
+export function parseAgentCard(value: unknown): AgentCard | null {
+  if (!isRecord(value)) return null;
+  if (isUnifiedAgentCard(value)) {
+    return { ...(value as AgentCard), schema: AGENT_CARD_SCHEMA };
+  }
+  if (isLegacyAgentCard(value)) {
+    const legacy = value as LegacyAgentCard;
+    return {
+      schema: AGENT_CARD_SCHEMA,
+      id: legacy.pda,
+      url: legacy.url,
+      name: legacy.name,
+      description: legacy.description ?? null,
+      metadataState: "unverified",
+      category: legacy.category ?? null,
+      tags: isStringArray(legacy.tags) ? legacy.tags : [],
+      deliverables: [],
+      buyerInputs: [],
+      examples: [],
+      sla: null,
+      price: legacy.price.mint
+        ? {
+            amountRaw: legacy.price.lamports,
+            currency: "SPL_TOKEN",
+            mint: legacy.price.mint,
+          }
+        : { amount: legacy.price.sol, currency: "SOL" },
+      providerAgent: legacy.provider ?? null,
+      store: null,
+      hireability: { uiState: "hireable", hireable: true, blockers: [] },
+    };
+  }
+  return null;
 }

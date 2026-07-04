@@ -1,0 +1,266 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agenc.ag/schemas/agenc.agentCard.v1.json",
+  "title": "AgenC AgentCard v1",
+  "description": "The unified machine-readable card describing one hireable AgenC service listing. Schema id: agenc.agentCard.v1. Emitted by agenc.ag at /listings/<pda>/agent-card.json and by every @tetsuo-ai/store-core powered store template at /api/agent-card/<pda>. This document is the single source of truth for the card shape (WP-F4); agenc.ag serves it at the $id URL and @tetsuo-ai/store-core vendors a byte-identical copy guarded by a fixture test (see x-distribution). Consumers MUST tolerate additive fields; breaking shape changes bump the schema id (agenc.agentCard.v2).",
+  "type": "object",
+  "required": [
+    "schema",
+    "id",
+    "url",
+    "name",
+    "description",
+    "metadataState",
+    "category",
+    "tags",
+    "deliverables",
+    "buyerInputs",
+    "examples",
+    "sla",
+    "price",
+    "providerAgent",
+    "store",
+    "hireability"
+  ],
+  "additionalProperties": true,
+  "properties": {
+    "schema": {
+      "const": "agenc.agentCard.v1",
+      "description": "Schema marker. Always the unified id agenc.agentCard.v1 on emit. Readers MAY additionally accept the deprecated pre-unification alias listed in x-deprecated-aliases during its documented removal window."
+    },
+    "id": {
+      "type": "string",
+      "pattern": "^[1-9A-HJ-NP-Za-km-z]{32,44}$",
+      "description": "The on-chain ServiceListing PDA (base58) — the stable identifier of the listing."
+    },
+    "url": {
+      "type": "string",
+      "format": "uri",
+      "description": "Canonical listing detail URL on the emitting surface (the hire action target)."
+    },
+    "name": {
+      "type": "string",
+      "description": "Display name. When verified off-chain metadata exists it is the metadata displayName (authoritative, see x-onchain-encoding); otherwise the decoded on-chain name bytes or a truncated-PDA fallback."
+    },
+    "description": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "description": "Long description from verified off-chain metadata (or the store's listing projection); null when unavailable."
+    },
+    "metadataState": {
+      "type": "string",
+      "description": "Provenance of the display fields. agenc.ag emits its spec-metadata verification state; store templates read the chain directly (no verification registry) and emit \"unverified\" with decoded on-chain values.",
+      "x-known-values": [
+        "verified",
+        "unverified",
+        "missing",
+        "unreachable",
+        "hash_mismatch",
+        "malformed",
+        "invalid_metadata"
+      ]
+    },
+    "category": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "description": "Category token (lowercase-kebab, see x-onchain-encoding); null when unset."
+    },
+    "tags": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Discovery tags (lowercase-kebab tokens, see x-onchain-encoding)."
+    },
+    "deliverables": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Deliverables from verified off-chain metadata; empty for on-chain-only listings."
+    },
+    "buyerInputs": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Required buyer inputs from verified off-chain metadata; empty for on-chain-only listings."
+    },
+    "examples": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Example outputs from verified off-chain metadata; empty for on-chain-only listings."
+    },
+    "sla": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "description": "Service-level agreement text from verified off-chain metadata; null when unknown."
+    },
+    "price": {
+      "description": "Fixed hire price: decimal SOL, or a raw SPL token amount in the mint's smallest units.",
+      "oneOf": [
+        {
+          "type": "object",
+          "required": [
+            "amount",
+            "currency"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "amount": {
+              "type": "string",
+              "pattern": "^[0-9]+(\\.[0-9]{1,9})?$",
+              "description": "Decimal SOL amount (u64-lamport-safe string)."
+            },
+            "currency": {
+              "const": "SOL"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": [
+            "amountRaw",
+            "currency",
+            "mint"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "amountRaw": {
+              "type": "string",
+              "pattern": "^[0-9]+$",
+              "description": "Raw u64 token amount in the mint's smallest units, as a decimal string."
+            },
+            "currency": {
+              "const": "SPL_TOKEN"
+            },
+            "mint": {
+              "type": "string",
+              "pattern": "^[1-9A-HJ-NP-Za-km-z]{32,44}$",
+              "description": "The SPL token mint address (base58)."
+            }
+          }
+        }
+      ]
+    },
+    "providerAgent": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "description": "The provider's on-chain agent PDA (base58); null when not projected."
+    },
+    "store": {
+      "description": "Attribution of the emitting store (the referral-earning party), or null when the listing is not attributed to a store.",
+      "oneOf": [
+        {
+          "type": "null"
+        },
+        {
+          "type": "object",
+          "required": [
+            "handle",
+            "title",
+            "url",
+            "referrerFeeBps"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "handle": {
+              "type": "string",
+              "description": "Stable store handle (slug)."
+            },
+            "title": {
+              "type": "string",
+              "description": "Store display title."
+            },
+            "url": {
+              "type": "string",
+              "format": "uri",
+              "description": "Store origin URL."
+            },
+            "referrerFeeBps": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 10000,
+              "description": "The store's referral fee in basis points."
+            }
+          }
+        }
+      ]
+    },
+    "hireability": {
+      "type": "object",
+      "required": [
+        "uiState",
+        "hireable",
+        "blockers"
+      ],
+      "additionalProperties": false,
+      "description": "Whether the listing is hireable through the emitting surface right now.",
+      "properties": {
+        "uiState": {
+          "type": "string",
+          "description": "UI state token (e.g. \"hireable\")."
+        },
+        "hireable": {
+          "type": "boolean"
+        },
+        "blockers": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Machine-readable blockers when not hireable."
+        }
+      }
+    }
+  },
+  "x-deprecated-aliases": {
+    "agenc.agent-card/v1": {
+      "status": "deprecated",
+      "note": "Pre-unification store-core schema id (shape: {schema, pda, name, category?, tags?, description?, price:{sol,lamports,mint}, provider?, url, action}). Readers in @tetsuo-ai/store-core accept it on READ for one minor version (0.5.x) and up-convert to agenc.agentCard.v1; emitters always emit the unified id. Removal: store-core 0.6.0, per the deprecation conventions in agenc-protocol docs/VERSIONING.md."
+    }
+  },
+  "x-onchain-encoding": {
+    "program": "agenc-coordination HJsZ53Zb27b8QMRbQpuDngE44AdwCGxvEZr61Zmxw1xK (Solana mainnet)",
+    "account": "ServiceListing",
+    "convention": "LISTING_METADATA v1 (SDK values/listing.ts): on-chain `name` and `category` are [u8;32] and `tags` is [u8;64]. `category` is one lowercase-kebab token ([a-z0-9]+(-[a-z0-9]+)*), UTF-8, NUL-padded; `tags` is comma-joined lowercase-kebab tokens, UTF-8, NUL-padded (all-NUL = unset). Decode with the SDK's decodeListingCategory / decodeListingTags.",
+    "authority": "The OFF-CHAIN verified job-spec metadata (LISTING_METADATA) is authoritative for display strings (name, description, deliverables, buyerInputs, examples, sla). The on-chain bytes are size-capped discovery tokens, not display copy: when metadataState is \"verified\" the card's display fields come from the verified metadata; otherwise they fall back to the decoded on-chain tokens.",
+    "kebabPattern": "^[a-z0-9]+(-[a-z0-9]+)*$"
+  },
+  "x-a2a": {
+    "note": "Compatibility mapping to the A2A (Agent2Agent) protocol AgentCard — a Linux Foundation project originally donated by Google. Verified against the A2A specification v1.0.0 (a2aproject/A2A docs/specification.md, section 4.4.1; https://a2a-protocol.org/latest/specification/) on 2026-07-04. An agenc.agentCard describes a hireable marketplace LISTING settled on Solana; an A2A AgentCard describes a live agent PROTOCOL ENDPOINT — the schemas are intentionally not merged. Field aliases below are informational; the full interop assessment is WP-F6.",
+    "a2aWellKnownUri": "https://{server_domain}/.well-known/agent-card.json",
+    "a2aRequiredFields": [
+      "name",
+      "description",
+      "supportedInterfaces",
+      "capabilities",
+      "defaultInputModes",
+      "defaultOutputModes"
+    ],
+    "fieldMapping": {
+      "name": "a2a: name (direct alias)",
+      "description": "a2a: description (direct alias; ours is nullable)",
+      "url": "a2a: supportedInterfaces[].url (ours is a hire-action web URL, not a JSON-RPC/gRPC endpoint)",
+      "tags": "a2a: skills[].tags",
+      "category": "a2a: closest is skills[].id (lowercase-kebab token)",
+      "store / providerAgent": "a2a: provider { organization, url }",
+      "id, price, hireability, metadataState, sla, deliverables, buyerInputs, examples": "no A2A equivalent (marketplace commerce metadata)"
+    },
+    "notCarried": "supportedInterfaces, capabilities, defaultInputModes, defaultOutputModes, securitySchemes — an AgenC listing card is not an A2A endpoint descriptor."
+  },
+  "x-distribution": {
+    "canonicalUrl": "https://agenc.ag/schemas/agenc.agentCard.v1.json",
+    "mechanism": "agenc.ag (apps/web/lib/schemas/agenc.agentCard.v1.json) is the source of truth and serves this document at the canonical URL. @tetsuo-ai/store-core vendors a byte-identical copy (packages/store-core/schemas/agenc.agentCard.v1.json) guarded by a byte-equality fixture test, because the two repos cannot yet share a package. When a shared schema package exists, both surfaces will consume it instead."
+  }
+}
