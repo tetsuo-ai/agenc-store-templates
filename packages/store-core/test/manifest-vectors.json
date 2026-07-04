@@ -1,0 +1,66 @@
+{
+  "_comment": "CROSS-IMPLEMENTATION COMPATIBILITY ANCHOR for agenc.storeManifest.v1 (P5.2, agenc-protocol/docs/P5_2_STORE_IDENTITY_SPEC.md §7.3). Any other implementation (agenc-ag, a third-party verifier, a Rust/Python port) MUST produce byte-identical `canonicalJson` and the same `sha256` for each body below. `sha256` is the lowercase-hex sha-256 of the UTF-8 `canonicalJson` bytes; `canonicalJson` is sorted-key, no-whitespace JSON (json-stable-v1). Do NOT edit a hash without regenerating from the reference implementation — a changed hash is a breaking change to the standard.",
+  "schema": "agenc.storeManifest.v1",
+  "signingMessageTemplate": "agenc store manifest v1\nsha256: <sha256>",
+  "vectors": [
+    {
+      "name": "minimal",
+      "note": "No operator, no moderation, no storePda; a dedicated-domain store.",
+      "body": {
+        "agents": [],
+        "handle": "acme",
+        "operator": "",
+        "operatorFeeBps": 0,
+        "origin": "https://store.example.com",
+        "referrerFeeBps": 250,
+        "schema": "agenc.storeManifest.v1",
+        "title": "Acme Agent Store",
+        "updatedAt": 1751500000,
+        "wallet": "DxY6ZoT2Kgo7ARVMTQ8zVsxQs8yqkNLbuApxc9yf98yX"
+      },
+      "canonicalJson": "{\"agents\":[],\"handle\":\"acme\",\"operator\":\"\",\"operatorFeeBps\":0,\"origin\":\"https://store.example.com\",\"referrerFeeBps\":250,\"schema\":\"agenc.storeManifest.v1\",\"title\":\"Acme Agent Store\",\"updatedAt\":1751500000,\"wallet\":\"DxY6ZoT2Kgo7ARVMTQ8zVsxQs8yqkNLbuApxc9yf98yX\"}",
+      "sha256": "13234596c5e90718e9ffef7c45fca240f295147e150054d9de1d13fa03ae5b7d"
+    },
+    {
+      "name": "full",
+      "note": "Every field present: operator leg, Q7 moderation posture, storePda, curated agents.",
+      "body": {
+        "agents": ["H66R3iFjeYj2sweCiFuJXNHz2NhjpFDHKjRNsPznDLC8"],
+        "handle": "acme-pro",
+        "moderation": {
+          "attestorEndpoint": "https://attest.example.com/api/task-moderation/attest",
+          "moderator": "7RkbpXC7sPVNYSLVkaxChHgXNa4J8B4kgBhzRZzjTkHc"
+        },
+        "operator": "2MotDCzC2HR8JstEze45p6ZyJYCzKFuAytGwLVmnopzB",
+        "operatorFeeBps": 100,
+        "origin": "https://pro.example.com",
+        "referrerFeeBps": 250,
+        "schema": "agenc.storeManifest.v1",
+        "storePda": "7RkbpXC7sPVNYSLVkaxChHgXNa4J8B4kgBhzRZzjTkHc",
+        "title": "Acme Pro",
+        "updatedAt": 1751500001,
+        "wallet": "DxY6ZoT2Kgo7ARVMTQ8zVsxQs8yqkNLbuApxc9yf98yX"
+      },
+      "canonicalJson": "{\"agents\":[\"H66R3iFjeYj2sweCiFuJXNHz2NhjpFDHKjRNsPznDLC8\"],\"handle\":\"acme-pro\",\"moderation\":{\"attestorEndpoint\":\"https://attest.example.com/api/task-moderation/attest\",\"moderator\":\"7RkbpXC7sPVNYSLVkaxChHgXNa4J8B4kgBhzRZzjTkHc\"},\"operator\":\"2MotDCzC2HR8JstEze45p6ZyJYCzKFuAytGwLVmnopzB\",\"operatorFeeBps\":100,\"origin\":\"https://pro.example.com\",\"referrerFeeBps\":250,\"schema\":\"agenc.storeManifest.v1\",\"storePda\":\"7RkbpXC7sPVNYSLVkaxChHgXNa4J8B4kgBhzRZzjTkHc\",\"title\":\"Acme Pro\",\"updatedAt\":1751500001,\"wallet\":\"DxY6ZoT2Kgo7ARVMTQ8zVsxQs8yqkNLbuApxc9yf98yX\"}",
+      "sha256": "cc0121b793629a1495d5f407946309ddfc7f2d5dc574ae86e5bc21050c2acc9b"
+    },
+    {
+      "name": "hosted",
+      "note": "Hosted multi-tenant store: origin is \"\" (no own domain), so the verifier skips the origin check.",
+      "body": {
+        "agents": [],
+        "handle": "hosted-store",
+        "operator": "",
+        "operatorFeeBps": 0,
+        "origin": "",
+        "referrerFeeBps": 0,
+        "schema": "agenc.storeManifest.v1",
+        "title": "Hosted Store",
+        "updatedAt": 1751500002,
+        "wallet": "DxY6ZoT2Kgo7ARVMTQ8zVsxQs8yqkNLbuApxc9yf98yX"
+      },
+      "canonicalJson": "{\"agents\":[],\"handle\":\"hosted-store\",\"operator\":\"\",\"operatorFeeBps\":0,\"origin\":\"\",\"referrerFeeBps\":0,\"schema\":\"agenc.storeManifest.v1\",\"title\":\"Hosted Store\",\"updatedAt\":1751500002,\"wallet\":\"DxY6ZoT2Kgo7ARVMTQ8zVsxQs8yqkNLbuApxc9yf98yX\"}",
+      "sha256": "9b72bf7fe9f3a27f9737f8327ba3eeeeefa8e050f0242b2e572c2b0b99e9a9ea"
+    }
+  ]
+}

@@ -12,6 +12,7 @@ export default defineConfig({
   entry: {
     index: "src/index.ts",
     "config/index": "src/config/index.ts",
+    "manifest/index": "src/manifest/index.ts",
     "seo/index": "src/seo/index.ts",
     "sections/index": "src/sections/index.ts",
     "upgrade/index": "src/upgrade/index.ts",

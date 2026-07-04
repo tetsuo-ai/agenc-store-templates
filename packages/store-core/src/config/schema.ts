@@ -20,6 +20,10 @@
  */
 import { isAddress } from "@solana/kit";
 import { z } from "zod";
+import {
+  STORE_MANIFEST_HANDLE_RE,
+  STORE_MANIFEST_SIGNATURE_RE,
+} from "../manifest/schema.js";
 
 /**
  * The combined on-chain fee cap, in basis points, the deployed settlement path
@@ -361,6 +365,89 @@ export const operatorSchema = z
 export type OperatorConfig = z.infer<typeof operatorSchema>;
 
 /**
+ * Portable store identity (`agenc.storeManifest.v1`, P5.2) — pins for the
+ * signed manifest the store serves at `/.well-known/agenc-store.json`.
+ * **Entirely optional**: with nothing set, the store serves an UNSIGNED
+ * manifest derived from this config (`signature: null`, `status: "unsigned"`
+ * — surfaces treat it as unverified, never invalid).
+ *
+ * To sign (the one-signature flow, docs/STORE_MANIFEST.md):
+ *
+ *   1. pin `updatedAt` here (the signature covers it),
+ *   2. GET `/.well-known/agenc-store.json` — the unsigned envelope's
+ *      `signing.message` is the EXACT message to sign,
+ *   3. sign it with the OWNER wallet (ed25519 detached over the UTF-8 bytes;
+ *      any wallet `signMessage`, or
+ *      `node node_modules/@tetsuo-ai/store-core/scripts/manifest-sign.mjs`),
+ *   4. set `signature` here (base58). Any later config change requires
+ *      re-signing — the route fails closed on a stale signature.
+ */
+export const manifestConfigSchema = z
+  .object({
+    /**
+     * Owner wallet the manifest names + the signature verifies against.
+     * Defaults to `referrer.wallet` (the store owner's earning wallet).
+     */
+    wallet: base58Address.optional(),
+    /**
+     * Display handle (lowercase `[a-z0-9-]`, 3-20 chars, starts alphanumeric —
+     * NOT a global uniqueness key). Defaults to a slug of the store `name`.
+     */
+    handle: z
+      .string()
+      .regex(
+        STORE_MANIFEST_HANDLE_RE,
+        "manifest.handle must be 3-20 lowercase [a-z0-9-] chars, starting alphanumeric",
+      )
+      .optional(),
+    /**
+     * Agent PDAs this store advertises as its own/curated roster. Defaults to
+     * `curation.providers` (empty for an uncurated catalog store).
+     */
+    agents: z.array(base58Address).optional(),
+    /** The on-chain Store PDA, once the P5.2 program batch ships. */
+    storePda: base58Address.optional(),
+    /**
+     * Unix timestamp (seconds) the manifest was authored. REQUIRED once
+     * `signature` is set (the signature covers it, so it must be pinned —
+     * a floating "now" would invalidate the signature every second).
+     */
+    updatedAt: z
+      .number()
+      .int("manifest.updatedAt must be an integer unix timestamp in seconds")
+      .positive("manifest.updatedAt must be a positive unix timestamp")
+      .optional(),
+    /**
+     * Base58 ed25519 detached signature by the owner wallet over
+     * `agenc store manifest v1\nsha256: <hex of the canonical body>`.
+     * Deliberately domain-neutral — no surface string in the envelope.
+     */
+    signature: z
+      .string()
+      .regex(
+        STORE_MANIFEST_SIGNATURE_RE,
+        "manifest.signature must be a base58 64-byte ed25519 signature",
+      )
+      .optional(),
+  })
+  .strict()
+  .superRefine((value, ctx) => {
+    if (value.signature !== undefined && value.updatedAt === undefined) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["updatedAt"],
+        message:
+          "manifest.updatedAt is required when manifest.signature is set — " +
+          "the signature covers the exact body including updatedAt, so it " +
+          "must be pinned to the value that was signed (docs/STORE_MANIFEST.md)",
+      });
+    }
+  });
+
+/** {@link manifestConfigSchema} as a TypeScript type. */
+export type ManifestConfig = z.infer<typeof manifestConfigSchema>;
+
+/**
  * Target cluster. `"localnet"` is a first-class value for the local-first build
  * strategy (the sandbox stack). `"mainnet"` points the store at REAL funds and
  * FAILS validation unless `allowMainnet: true` is set explicitly
@@ -413,6 +500,11 @@ export const storeConfigObjectSchema = z
      * See {@link operatorSchema}.
      */
     operator: operatorSchema.optional(),
+    /**
+     * OPTIONAL portable-identity pins for the signed
+     * `/.well-known/agenc-store.json` manifest. See {@link manifestConfigSchema}.
+     */
+    manifest: manifestConfigSchema.optional(),
   })
   .strict();
 

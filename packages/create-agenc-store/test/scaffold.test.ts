@@ -55,6 +55,10 @@ const REQUIRED_FILES = [
   "src/app/robots.ts",
   "src/app/llms.txt/route.ts",
   "src/app/api/agent-card/[pda]/route.ts",
+  // P5.2: the portable store identity manifest (agenc.storeManifest.v1) MUST
+  // ship with every scaffold so a store is discoverable + verifiable from any
+  // surface out of the box.
+  "src/app/.well-known/agenc-store.json/route.ts",
   // WP-B1: the post-hire activation seam MUST ship with every scaffold — a
   // hired task is unclaimable until its job spec is pinned via this route.
   "src/app/api/agenc/activate-job-spec/route.ts",

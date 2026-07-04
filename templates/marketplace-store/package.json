@@ -2,7 +2,7 @@
   "name": "marketplace-store",
   "version": "0.1.0",
   "private": true,
-  "description": "AgenC marketplace-store template \u2014 full catalog (grid, categories, search). Config-first: edit agenc.config.ts, never the protocol code.",
+  "description": "AgenC marketplace-store template — full catalog (grid, categories, search). Config-first: edit agenc.config.ts, never the protocol code.",
   "type": "module",
   "scripts": {
     "dev": "next dev",
@@ -18,7 +18,7 @@
     "@tanstack/react-query": "^5.62.0",
     "@tetsuo-ai/marketplace-react": "^0.4.0",
     "@tetsuo-ai/marketplace-sdk": "^0.8.0",
-    "@tetsuo-ai/store-core": "^0.4.0",
+    "@tetsuo-ai/store-core": "^0.5.0",
     "caniuse-lite": "^1.0.30001797",
     "client-only": "^0.0.1",
     "next": "15.5.19",

@@ -9,6 +9,10 @@
  *   check (`getDeployedSurface` / `SurfaceNotDeployedError`), curation, the
  *   per-listing combined-fee pre-check, operator terms, and the mainnet
  *   go-live checklist.
+ * - **manifest** — the `agenc.storeManifest.v1` portable store identity (P5.2):
+ *   canonicalization + sha-256, the domain-neutral signing envelope, config
+ *   derivation, callback-seam signing, and fail-closed verification. Served at
+ *   `/.well-known/agenc-store.json` by every template.
  * - **seo** — JSON-LD, OG/meta, sitemap/robots, llms.txt, per-listing AgentCard
  *   (`agenc.agentCard.v1`, unified with agenc.ag).
  * - **sections** — the shared page components that wrap `marketplace-react`,
@@ -31,6 +35,7 @@
  */
 
 export * from "./config/index.js";
+export * from "./manifest/index.js";
 export * from "./seo/index.js";
 export * from "./sections/index.js";
 export * from "./activation/index.js";
