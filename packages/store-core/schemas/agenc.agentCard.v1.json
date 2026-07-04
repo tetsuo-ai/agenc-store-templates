@@ -238,15 +238,17 @@
     "kebabPattern": "^[a-z0-9]+(-[a-z0-9]+)*$"
   },
   "x-a2a": {
-    "note": "Compatibility mapping to the A2A (Agent2Agent) protocol AgentCard — a Linux Foundation project originally donated by Google. Verified against the A2A specification v1.0.0 (a2aproject/A2A docs/specification.md, section 4.4.1; https://a2a-protocol.org/latest/specification/) on 2026-07-04. An agenc.agentCard describes a hireable marketplace LISTING settled on Solana; an A2A AgentCard describes a live agent PROTOCOL ENDPOINT — the schemas are intentionally not merged. Field aliases below are informational; the full interop assessment is WP-F6.",
+    "note": "Compatibility mapping to the A2A (Agent2Agent) protocol AgentCard — a Linux Foundation project originally donated by Google. Verified against the A2A specification v1.0 (a2aproject/A2A docs/specification.md section 4.4.1 and the authoritative specification/a2a.proto at tag v1.0.1; https://a2a-protocol.org/latest/specification/) on 2026-07-04. An agenc.agentCard describes a hireable marketplace LISTING settled on Solana; an A2A AgentCard describes a live agent PROTOCOL ENDPOINT — the schemas are intentionally not merged. Field aliases below are informational; the full interop assessment is WP-F6.",
     "a2aWellKnownUri": "https://{server_domain}/.well-known/agent-card.json",
     "a2aRequiredFields": [
       "name",
       "description",
       "supportedInterfaces",
+      "version",
       "capabilities",
       "defaultInputModes",
-      "defaultOutputModes"
+      "defaultOutputModes",
+      "skills"
     ],
     "fieldMapping": {
       "name": "a2a: name (direct alias)",
