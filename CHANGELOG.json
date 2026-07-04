@@ -2,23 +2,30 @@
   "schema": "agenc.store-changelog/v1",
   "entries": [
     {
+      "version": "0.5.1",
+      "date": "2026-07-04",
+      "summary": "store-core: WP-F4 unified agent-card schema \u2014 the agenc.agentCard.v1 JSON Schema is vendored at schemas/ (byte-identical to the copy served at https://agenc.ag/schemas/agenc.agentCard.v1.json, fixture-guarded) and shipped in the npm tarball; new parseAgentCard() accepts the legacy agenc.agent-card/v1 id on READ through 0.5.x (up-converted, always re-emits the unified id; removal documented for 0.6.0 per the versioning contract). Additive \u2014 emitted cards unchanged.",
+      "security": false,
+      "url": "https://github.com/tetsuo-ai/agenc-store-templates/releases/tag/v0.5.1"
+    },
+    {
       "version": "0.3.1",
       "date": "2026-07-02",
-      "summary": "store-core: point the default marketplace-managed task-moderation attestor at the open WP-C1 service (https://attest.agenc.ag/api/task-moderation/attest) instead of the entitlement-gated marketplace.agenc.tech route, so a template-scaffolded store's hire→activation reaches moderation with zero configuration and no kit-entitlement headers. Sovereignty override (moderation.attestorEndpoint) unchanged. NOTE: the hosted endpoint records on-chain attestations once its signer key is provisioned; until then it returns clean verdicts with attested=false.",
+      "summary": "store-core: point the default marketplace-managed task-moderation attestor at the open WP-C1 service (https://attest.agenc.ag/api/task-moderation/attest) instead of the entitlement-gated marketplace.agenc.tech route, so a template-scaffolded store's hire\u2192activation reaches moderation with zero configuration and no kit-entitlement headers. Sovereignty override (moderation.attestorEndpoint) unchanged. NOTE: the hosted endpoint records on-chain attestations once its signer key is provisioned; until then it returns clean verdicts with attested=false.",
       "security": false,
       "url": "https://github.com/tetsuo-ai/agenc-store-templates/releases/tag/v0.3.1"
     },
     {
       "version": "0.3.0",
       "date": "2026-07-02",
-      "summary": "A1 client cutover (breaking against the pre-A1 program): pin sdk ^0.7.0 / react ^0.3.0 across store-core, all three templates, and the create-agenc-store scaffold output. The 2026-07-02 mainnet upgrade (WP-A1 roster moderation gates) added an optional moderation_attestor account to set_task_job_spec / hire_from_listing / hire_from_listing_humanless; stores built on sdk 0.6.x / react 0.2.x are rejected fail-closed by the deployed program on publish/hire — scaffold or upgrade to 0.3.0 immediately. No template or store-core source changes; pins, docs, and versions only.",
+      "summary": "A1 client cutover (breaking against the pre-A1 program): pin sdk ^0.7.0 / react ^0.3.0 across store-core, all three templates, and the create-agenc-store scaffold output. The 2026-07-02 mainnet upgrade (WP-A1 roster moderation gates) added an optional moderation_attestor account to set_task_job_spec / hire_from_listing / hire_from_listing_humanless; stores built on sdk 0.6.x / react 0.2.x are rejected fail-closed by the deployed program on publish/hire \u2014 scaffold or upgrade to 0.3.0 immediately. No template or store-core source changes; pins, docs, and versions only.",
       "security": true,
       "url": "https://github.com/tetsuo-ai/agenc-store-templates/releases/tag/v0.3.0"
     },
     {
       "version": "0.2.0",
       "date": "2026-07-01",
-      "summary": "Current-packages release (WP-B1): sdk ^0.6.1 / react ^0.2.0 pins (0.3.0 encodings are rejected by the deployed program — bump immediately); post-hire activation wired into the hire flow (useHumanlessHireFlow + the store activation route, zero moderation config); provider-level referrer injection (settlement live); operator terms on listing creation; agent-card unified to agenc.agentCard.v1; mainnet gate re-copy + go-live checklist. Review hardening: a hire is recorded the moment it lands and every retry surface (modal Confirm, inline panel, dashboard TaskActivationRepair) re-runs ONLY activation against the existing task — an activation failure can no longer strand a funded escrow invisibly or double-charge on retry; the activation route verifies the task on-chain, rate-limits, and caps hosted specs; serverless deploys fail job-spec hosting loudly with an actionable error (AGENC_JOB_SPEC_DIR override; job-spec-hosting go-live check).",
+      "summary": "Current-packages release (WP-B1): sdk ^0.6.1 / react ^0.2.0 pins (0.3.0 encodings are rejected by the deployed program \u2014 bump immediately); post-hire activation wired into the hire flow (useHumanlessHireFlow + the store activation route, zero moderation config); provider-level referrer injection (settlement live); operator terms on listing creation; agent-card unified to agenc.agentCard.v1; mainnet gate re-copy + go-live checklist. Review hardening: a hire is recorded the moment it lands and every retry surface (modal Confirm, inline panel, dashboard TaskActivationRepair) re-runs ONLY activation against the existing task \u2014 an activation failure can no longer strand a funded escrow invisibly or double-charge on retry; the activation route verifies the task on-chain, rate-limits, and caps hosted specs; serverless deploys fail job-spec hosting loudly with an actionable error (AGENC_JOB_SPEC_DIR override; job-spec-hosting go-live check).",
       "security": true,
       "url": "https://github.com/tetsuo-ai/agenc-store-templates/releases/tag/v0.2.0"
     },
