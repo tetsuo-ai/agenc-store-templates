@@ -81,4 +81,26 @@ export default defineStore({
   //   // 0.2.1) that doesn't disclose its own signer pubkey:
   //   // moderator: "YourAttestorSignerPubkey...",
   // },
+
+  // PORTABLE STORE IDENTITY (P5.2) — the store serves a signed, domain-neutral
+  // `agenc.storeManifest.v1` manifest at `/.well-known/agenc-store.json`, so
+  // any surface (agenc.ag, another node, a third-party verifier) can prove YOUR
+  // wallet authored exactly this config (fees, moderation posture, agents)
+  // without trusting any registry. With nothing set below, the route serves the
+  // UNSIGNED manifest (surfaces treat it as unverified, never invalid).
+  //
+  // To sign it (one signature, no on-chain tx — see
+  // node_modules/@tetsuo-ai/store-core/docs/STORE_MANIFEST.md):
+  //   1. pin `updatedAt` (the signature covers it),
+  //   2. GET /.well-known/agenc-store.json -> copy the `signing.message`,
+  //   3. sign that message with your OWNER wallet (any wallet's signMessage, or
+  //      `node node_modules/@tetsuo-ai/store-core/scripts/manifest-sign.mjs
+  //       <owner-keypair.json> http://localhost:3000/.well-known/agenc-store.json`),
+  //   4. paste the base58 signature below. Any later config edit -> re-sign.
+  // manifest: {
+  //   // wallet: defaults to referrer.wallet (your earning wallet).
+  //   // handle: defaults to a slug of `name`.
+  //   updatedAt: 1751500000, // unix seconds — pin to the value you signed
+  //   signature: "Base58Ed25519SignatureFromStep3...",
+  // },
 });

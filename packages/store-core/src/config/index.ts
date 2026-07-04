@@ -26,6 +26,7 @@ export {
   apiSchema,
   moderationSchema,
   operatorSchema,
+  manifestConfigSchema,
   listingCategorySchema,
   REFERRER_COMBINED_FEE_BPS_CAP,
   REFERRER_FEE_BPS_MIN,
@@ -42,6 +43,7 @@ export {
   type ApiConfig,
   type ModerationConfig,
   type OperatorConfig,
+  type ManifestConfig,
   type ListingCategory,
 } from "./schema.js";
 
