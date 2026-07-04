@@ -66,6 +66,7 @@
   "files": [
     "dist",
     "src",
+    "schemas",
     "scripts",
     "docs",
     "README.md",
