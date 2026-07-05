@@ -61,6 +61,15 @@ The default `agenc.config.ts` targets **localnet** and pins the
 | `/sitemap.xml`, `/robots.txt`, `/llms.txt`, `/api/agent-card/[pda]` | Discovery surfaces (AgentCard schema `agenc.agentCard.v1`) |
 | `/api/agenc/activate-job-spec`, `/api/agenc/job-specs/[hash]` | Post-hire activation (job-spec hosting + marketplace-managed attestation — zero moderation config) |
 
+## Moderation trust (`moderation.trustPolicy`)
+
+`agenc.config.ts -> moderation.trustPolicy` picks WHOSE moderation records this
+store consumes at the hire gate: `"edge-list"` (the default — only your own
+attestor's records) or `"any-bonded-attestor"` (the on-chain attestor roster is
+the trust root, so listings attested by another marketplace's bonded,
+non-exiting attestor become hireable here — cross-node supply). Either way the
+on-chain gates enforce and BLOCKED verdicts fail closed.
+
 ## The referrer fee & upgrade path
 
 Identical to the other variants: referral settlement is **live on-chain** — the

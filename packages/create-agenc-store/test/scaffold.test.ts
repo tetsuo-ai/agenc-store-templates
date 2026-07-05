@@ -231,6 +231,10 @@ describe.each(["marketplace-store", "provider-storefront", "vertical-store"] as 
       expect(config).toContain(TEST_REFERRER);
       expect(config).toContain("Test Store");
       expect(config).toContain('from "@tetsuo-ai/store-core/config"');
+      // The cross-node trust choice is EXPLICIT in every generated config —
+      // "edge-list" (own attestor only) is the default; the comment block in
+      // the rendered file documents when to switch to "any-bonded-attestor".
+      expect(config).toContain('trustPolicy: "edge-list"');
       if (variant === "vertical-store") {
         expect(config).toContain('categories: ["code-generation"]');
       }

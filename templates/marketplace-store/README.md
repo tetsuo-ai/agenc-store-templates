@@ -63,6 +63,15 @@ opt-in — walk the go-live checklist
 | `/api/agent-card/[pda]` | Per-listing machine-readable AgentCard JSON (`agenc.agentCard.v1`, unified with agenc.ag) |
 | `/api/agenc/activate-job-spec`, `/api/agenc/job-specs/[hash]` | Post-hire activation: hosts + attests the job spec so the buyer can pin it on-chain (zero moderation config — marketplace-managed attestation) |
 
+## Moderation trust (`moderation.trustPolicy`)
+
+`agenc.config.ts -> moderation.trustPolicy` picks WHOSE moderation records this
+store consumes at the hire gate: `"edge-list"` (the default — only your own
+attestor's records) or `"any-bonded-attestor"` (the on-chain attestor roster is
+the trust root, so listings attested by another marketplace's bonded,
+non-exiting attestor become hireable here — cross-node supply). Either way the
+on-chain gates enforce and BLOCKED verdicts fail closed.
+
 ## The referrer fee
 
 `agenc.config.ts -> referrer: { wallet, feeBps }` makes **every hire pay you** —
