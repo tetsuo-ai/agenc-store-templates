@@ -1,6 +1,6 @@
 {
   "name": "create-agenc-store",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "description": "Scaffold a deploy-your-own AgenC agent store from a template (PLAN_2 C4). `npx create-agenc-store my-store`.",
   "type": "module",
   "bin": {
@@ -21,7 +21,7 @@
     "prepack": "node scripts/bundle-templates.mjs && tsup"
   },
   "dependencies": {
-    "@tetsuo-ai/store-core": "^0.5.0",
+    "@tetsuo-ai/store-core": "^0.6.0",
     "prompts": "^2.4.2"
   },
   "devDependencies": {

@@ -13,7 +13,8 @@
  * Emit is ALWAYS the unified id. The pre-unification `agenc.agent-card/v1`
  * id/shape (WP-B1 removed the emitter) is still ACCEPTED on read by
  * {@link parseAgentCard} for one minor version — deprecated, removal in
- * store-core 0.6.0 per the deprecation conventions in agenc-protocol
+ * store-core 0.7.0 (deferred past 0.6.0 — the roster-trust release keeps the
+ * read path) per the deprecation conventions in agenc-protocol
  * docs/VERSIONING.md.
  *
  * - `llms.txt` is a plain-text manifest pointing crawlers at the catalog and
@@ -40,7 +41,7 @@ export const AGENT_CARD_SCHEMA_URL =
 
 /**
  * @deprecated The pre-unification store-core schema id. Accepted on READ by
- * {@link parseAgentCard} through store-core 0.5.x only (removal: 0.6.0, per
+ * {@link parseAgentCard} through store-core 0.6.x only (removal: 0.7.0, per
  * agenc-protocol docs/VERSIONING.md deprecation conventions). Never emitted.
  */
 export const AGENT_CARD_LEGACY_SCHEMA = "agenc.agent-card/v1" as const;
@@ -265,7 +266,7 @@ export function buildLlmsTxt(
  * still deployed in the wild.
  *
  * @deprecated Read-only compatibility shape; removal with
- * {@link AGENT_CARD_LEGACY_SCHEMA} in store-core 0.6.0.
+ * {@link AGENT_CARD_LEGACY_SCHEMA} in store-core 0.7.0.
  */
 interface LegacyAgentCard {
   schema: typeof AGENT_CARD_LEGACY_SCHEMA;
@@ -346,7 +347,7 @@ function isLegacyAgentCard(value: Record<string, unknown>): value is Record<stri
  * Parse an untrusted value as an agent card (WP-F4 read path).
  *
  * Accepts the unified `agenc.agentCard.v1` shape, and — DEPRECATED, through
- * store-core 0.5.x only (removal: 0.6.0, per agenc-protocol
+ * store-core 0.6.x only (removal: 0.7.0, per agenc-protocol
  * docs/VERSIONING.md) — the pre-unification `agenc.agent-card/v1` shape,
  * which is up-converted so callers only ever see the unified shape. The
  * returned card ALWAYS carries `schema: "agenc.agentCard.v1"`; re-emitting a

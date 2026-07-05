@@ -2,6 +2,13 @@
   "schema": "agenc.store-changelog/v1",
   "entries": [
     {
+      "version": "0.6.0",
+      "date": "2026-07-04",
+      "summary": "store-core: §12 roster-trust consumption rail — new OPT-IN moderation.trustPolicy config (\"edge-list\" default = today's exact behavior; \"any-bonded-attestor\" = a consumable ListingModeration record by ANY registered, non-exiting on-chain roster ModerationAttestor makes a listing hireable here, so cross-node supply attested by another marketplace's attestor is hireable without re-attestation). The activation route's GET leg gains ?listing=<pda>: policy-aware trusted-record discovery that mirrors the program's hire-gate checks (status CLEAN/HUMAN_APPROVED, risk bound, unexpired — a record that merely EXISTS is never named) with hire-time acquisition from the store's OWN attestation service on a definitive miss (BLOCKED → 422 fail-closed; transient RPC errors propagate and never trigger a paid acquisition; roster snapshot hard-capped at MAX_ROSTER_ATTESTORS=512, no silent truncation). resolveActivationBackend wires it with zero configuration. Additive; the on-chain gates remain the enforcement point. NOTE: the legacy agenc.agent-card/v1 read-compat removal previously slated for 0.6.0 is deferred to 0.7.0 (this release keeps the read path).",
+      "security": false,
+      "url": "https://github.com/tetsuo-ai/agenc-store-templates/releases/tag/v0.6.0"
+    },
+    {
       "version": "0.5.1",
       "date": "2026-07-04",
       "summary": "store-core: WP-F4 unified agent-card schema \u2014 the agenc.agentCard.v1 JSON Schema is vendored at schemas/ (byte-identical to the copy served at https://agenc.ag/schemas/agenc.agentCard.v1.json, fixture-guarded) and shipped in the npm tarball; new parseAgentCard() accepts the legacy agenc.agent-card/v1 id on READ through 0.5.x (up-converted, always re-emits the unified id; removal documented for 0.6.0 per the versioning contract). Additive \u2014 emitted cards unchanged.",
