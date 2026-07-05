@@ -71,16 +71,30 @@ export default defineStore({
     llmsTxt: true,
   },
 
-  // Moderation is INVISIBLE BY DEFAULT — no setup: attestation (and the P1.2
-  // `moderator` pubkey the hire/activation gates name) is sourced from the
-  // marketplace-managed attestation service automatically. Both fields below
-  // are sovereignty overrides for operators running their OWN attestor:
-  // moderation: {
-  //   attestorEndpoint: "https://attestor.example.com/api/task-moderation/attest",
-  //   // Only for an OUTDATED self-hosted attestor (< agenc-moderation-api
-  //   // 0.2.1) that doesn't disclose its own signer pubkey:
-  //   // moderator: "YourAttestorSignerPubkey...",
-  // },
+  // Moderation attestation is INVISIBLE BY DEFAULT — no setup: attestation
+  // (and the P1.2 `moderator` pubkey the hire/activation gates name) is
+  // sourced from the marketplace-managed attestation service automatically.
+  moderation: {
+    // WHOSE moderation records this store consumes at the hire gate — the
+    // cross-node trust choice. Either way the on-chain gates stay the
+    // enforcement point and BLOCKED verdicts fail closed:
+    //  - "edge-list" (the default): only records by this store's OWN attestor
+    //    (the marketplace-managed service, or the overrides below). Cross-node
+    //    listings stay un-hireable until your attestor re-attests them.
+    //  - "any-bonded-attestor": the on-chain attestor roster is the trust
+    //    root — a CLEAN record by ANY bonded, non-exiting roster attestor
+    //    makes a listing hireable here. Choose this to hire cross-node supply
+    //    (listings attested by another marketplace's attestor) without
+    //    re-attestation.
+    // This explicit value wins over the AGENC_MODERATION_TRUST deploy env.
+    trustPolicy: "edge-list",
+
+    // Sovereignty overrides for operators running their OWN attestor:
+    // attestorEndpoint: "https://attestor.example.com/api/task-moderation/attest",
+    // Only for an OUTDATED self-hosted attestor (< agenc-moderation-api
+    // 0.2.1) that doesn't disclose its own signer pubkey:
+    // moderator: "YourAttestorSignerPubkey...",
+  },
 
   // PORTABLE STORE IDENTITY (P5.2) — the store serves a signed, domain-neutral
   // `agenc.storeManifest.v1` manifest at `/.well-known/agenc-store.json`, so

@@ -106,6 +106,23 @@ ${curationBlock(opts)}
     wallets: true,
   },
 
+  // WHOSE moderation records this store consumes at the hire gate — the
+  // cross-node trust choice. Either way the on-chain gates stay the
+  // enforcement point and BLOCKED verdicts fail closed:
+  //  - "edge-list" (the default): only records by this store's OWN attestor
+  //    (the marketplace-managed service, or your \`attestorEndpoint\` /
+  //    \`moderator\` override). Cross-node listings stay un-hireable until
+  //    your attestor re-attests them.
+  //  - "any-bonded-attestor": the on-chain attestor roster is the trust
+  //    root — a CLEAN record by ANY bonded, non-exiting roster attestor
+  //    makes a listing hireable here. Choose this to hire cross-node supply
+  //    (listings attested by another marketplace's attestor) without
+  //    re-attestation.
+  // This explicit value wins over the AGENC_MODERATION_TRUST deploy env.
+  moderation: {
+    trustPolicy: "edge-list",
+  },
+
   seo: {
     siteUrl: ${s(opts.siteUrl)},
     jsonLd: true,

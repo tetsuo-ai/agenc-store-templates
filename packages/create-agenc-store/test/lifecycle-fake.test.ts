@@ -99,6 +99,11 @@ describe("fake lifecycle: scaffold-config → listing → hire → activation-ca
       network: opts.network,
       api: { baseUrl: opts.apiBaseUrl },
       referrer: { wallet: opts.referrerWallet, feeBps: opts.referrerFeeBps },
+      // The scaffolder now emits the cross-node trust choice explicitly —
+      // this MUST validate through the real store-core schema (strict object:
+      // an unknown key would fail safeDefineStore, so this goes RED if the
+      // schema loses/renames `moderation.trustPolicy`).
+      moderation: { trustPolicy: "edge-list" },
       seo: { siteUrl: opts.siteUrl },
     });
     expect(config.success).toBe(true);
