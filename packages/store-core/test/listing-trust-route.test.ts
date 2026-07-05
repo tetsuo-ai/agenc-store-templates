@@ -10,6 +10,7 @@
  */
 import { describe, expect, it } from "vitest";
 import {
+  clientKeyOf,
   createActivateJobSpecHandler,
   createMemoryJobSpecStore,
   ListingModerationBlockedError,
@@ -25,6 +26,7 @@ function handlerWith(deps?: {
   resolveListingHireModeration?: (l: string) => Promise<ListingHireModeration>;
   resolveHireModerator?: () => Promise<string>;
   rateLimit?: { limit: number; windowMs: number } | false;
+  clientKey?: (request: Request) => string;
 }) {
   const hosting = createMemoryJobSpecStore({
     publicBaseUrl: "http://localhost:3000/api/agenc/job-specs",
@@ -35,6 +37,7 @@ function handlerWith(deps?: {
     resolveListingHireModeration: deps?.resolveListingHireModeration,
     resolveHireModerator: deps?.resolveHireModerator,
     rateLimit: deps?.rateLimit ?? false,
+    ...(deps?.clientKey ? { clientKey: deps.clientKey } : {}),
   });
 }
 
@@ -206,5 +209,88 @@ describe("moderation.trustPolicy config schema", () => {
         moderation: { trustPolicy: "trust-everyone" },
       }).success,
     ).toBe(false);
+  });
+});
+
+describe("F5a: rate-limiter client key hardening", () => {
+  function req(headers: Record<string, string>): Request {
+    return new Request("http://store.local/api/agenc/activate-job-spec", {
+      headers,
+    });
+  }
+
+  it("prefers the platform-set x-real-ip over anything the client sent", () => {
+    expect(
+      clientKeyOf(
+        req({
+          "x-real-ip": "203.0.113.7",
+          "x-forwarded-for": "6.6.6.6, 203.0.113.7",
+        }),
+      ),
+    ).toBe("203.0.113.7");
+  });
+
+  it("uses the RIGHTMOST x-forwarded-for hop — attacker-prepended hops cannot rotate the key", () => {
+    // The nearest (trusted) proxy appends the real peer LAST; the left
+    // entries are client-supplied garbage.
+    expect(clientKeyOf(req({ "x-forwarded-for": "1.1.1.1" }))).toBe("1.1.1.1");
+    const spoofedA = clientKeyOf(
+      req({ "x-forwarded-for": "6.6.6.1, 203.0.113.7" }),
+    );
+    const spoofedB = clientKeyOf(
+      req({ "x-forwarded-for": "6.6.6.2, 203.0.113.7" }),
+    );
+    // Rotating the spoofable first hop does NOT mint fresh limiter keys.
+    expect(spoofedA).toBe("203.0.113.7");
+    expect(spoofedB).toBe(spoofedA);
+  });
+
+  it("falls back to one shared bucket without proxy headers (conservative, not per-request keys)", () => {
+    expect(clientKeyOf(req({}))).toBe("unknown");
+  });
+
+  it("the handler accepts a clientKey override seam", async () => {
+    const seen: string[] = [];
+    const handler = handlerWith({
+      resolveListingHireModeration: async () => ({
+        moderator: MODERATOR,
+        source: "existing-record",
+      }),
+      rateLimit: { limit: 1, windowMs: 60_000 },
+      clientKey: (request) => {
+        const key = request.headers.get("x-custom-client") ?? "none";
+        seen.push(key);
+        return key;
+      },
+    });
+    const mk = () =>
+      new Request(
+        `http://store.local/api/agenc/activate-job-spec?listing=${LISTING_PDA}`,
+        { headers: { "x-custom-client": "party-a" } },
+      );
+    expect((await handler(mk())).status).toBe(200);
+    expect((await handler(mk())).status).toBe(429);
+    expect(seen).toEqual(["party-a", "party-a"]);
+  });
+});
+
+describe("relaxed-gate passthrough on the listing GET leg", () => {
+  it("serves { moderator, source: 'relaxed-gate' } verbatim", async () => {
+    const handler = handlerWith({
+      resolveListingHireModeration: async () => ({
+        moderator: MODERATOR,
+        source: "relaxed-gate",
+      }),
+    });
+    const response = await handler(
+      new Request(
+        `http://store.local/api/agenc/activate-job-spec?listing=${LISTING_PDA}`,
+      ),
+    );
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({
+      moderator: MODERATOR,
+      source: "relaxed-gate",
+    });
   });
 });

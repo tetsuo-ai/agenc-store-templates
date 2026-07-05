@@ -2,9 +2,11 @@
  * Unit tests for the §12 roster-trust consumption rail
  * (`activation/listing-trust`): trust-policy resolution, strict roster
  * scanning (discriminator filter, exit filtering, the MAX_ROSTER_ATTESTORS
- * bound, decode strictness), gate-mirroring record validity, discovery order
- * and fall-through, acquisition trigger conditions, and the end-to-end
- * resolver's fail-closed discipline.
+ * bound, decode strictness), gate-mirroring record validity, the §5.2 BLOCK
+ * floor, the global-authority candidate leg, the P1.3 liveness deadman,
+ * discovery order and fall-through, acquisition trigger conditions
+ * (single-flight + negative caching + catalog gating), the roster over-cap
+ * degrade path, and the end-to-end resolver's fail-closed discipline.
  *
  * All on-chain state is faked at the RPC boundary with REAL sdk account
  * encoders (the same bytes a cluster would return), so the tests exercise
@@ -12,9 +14,9 @@
  *
  * NOTE: this file deliberately imports the module under test as a NAMESPACE
  * (`listingTrust.*`) and nothing from `activation/server.ts`, so the whole
- * suite still loads against the pre-audit WIP revision of the module — that
- * is what makes the revert-sensitivity check meaningful (key tests here go
- * RED against the unaudited logic instead of dying on a missing import).
+ * suite still loads against earlier revisions of the module — that is what
+ * makes the revert-sensitivity check meaningful (key tests here go RED
+ * against the unaudited logic instead of dying on a missing import).
  */
 import { beforeEach, describe, expect, it } from "vitest";
 import { getAddressDecoder, getBase58Decoder } from "@solana/kit";
@@ -22,8 +24,13 @@ import {
   AGENC_COORDINATION_PROGRAM_ADDRESS,
   facade,
   findListingModerationPda,
+  findModerationAttestorPda,
+  findModerationBlockPda,
+  findModerationConfigPda,
   getListingModerationEncoder,
   getModerationAttestorEncoder,
+  getModerationBlockEncoder,
+  getModerationConfigEncoder,
   getServiceListingEncoder,
   MODERATION_ATTESTOR_DISCRIMINATOR,
 } from "@tetsuo-ai/marketplace-sdk";
@@ -40,6 +47,7 @@ const LISTING = addrOf(50);
 const MOD_OWN = addrOf(11); // the store's own attestor
 const MOD_FOREIGN = addrOf(12); // another node's roster attestor
 const MOD_EXITING = addrOf(13);
+const MOD_AUTHORITY = addrOf(14); // the global moderation authority
 const SPEC_HASH = new Uint8Array(32).fill(9);
 const SPEC_HASH_HEX = "09".repeat(32);
 const SPEC_URI = "https://specs.example.com/analyst.json";
@@ -85,24 +93,30 @@ function encodeModeration(input: {
   );
 }
 
-function encodeListing(specUri = SPEC_URI): Uint8Array {
+function encodeListing(
+  opts: { specUri?: string; state?: number; category?: string } = {},
+): Uint8Array {
+  const category = new Uint8Array(32);
+  if (opts.category) {
+    category.set(new TextEncoder().encode(opts.category));
+  }
   return Uint8Array.from(
     getServiceListingEncoder().encode({
       providerAgent: addrOf(2) as never,
       authority: addrOf(3) as never,
       listingId: new Uint8Array(32),
       name: new Uint8Array(64),
-      category: new Uint8Array(32),
+      category,
       tags: new Uint8Array(64),
       specHash: SPEC_HASH,
-      specUri,
+      specUri: opts.specUri ?? SPEC_URI,
       price: 1_000n,
       priceMint: null,
       requiredCapabilities: 0n,
       defaultDeadlineSecs: 0n,
       operator: addrOf(0) as never,
       operatorFeeBps: 0,
-      state: 0,
+      state: opts.state ?? 0,
       maxOpenJobs: 0,
       openJobs: 0,
       totalHires: 0n,
@@ -113,6 +127,47 @@ function encodeListing(specUri = SPEC_URI): Uint8Array {
       updatedAt: 1n,
       bump: 250,
       reserved: new Uint8Array(64),
+    }),
+  );
+}
+
+function encodeModerationConfig(input: {
+  moderationAuthority?: string;
+  enabled?: boolean;
+  updatedAt?: bigint;
+  windowSecs?: number;
+}): Uint8Array {
+  const reserved = new Uint8Array(6);
+  const w = input.windowSecs ?? 0;
+  reserved[0] = w & 0xff;
+  reserved[1] = (w >>> 8) & 0xff;
+  reserved[2] = (w >>> 16) & 0xff;
+  reserved[3] = (w >>> 24) & 0xff;
+  return Uint8Array.from(
+    getModerationConfigEncoder().encode({
+      authority: addrOf(1) as never,
+      moderationAuthority: (input.moderationAuthority ?? MOD_AUTHORITY) as never,
+      enabled: input.enabled ?? true,
+      createdAt: 1n,
+      updatedAt: input.updatedAt ?? BigInt(NOW),
+      bump: 253,
+      reserved,
+    }),
+  );
+}
+
+function encodeModerationBlock(status: number): Uint8Array {
+  return Uint8Array.from(
+    getModerationBlockEncoder().encode({
+      contentHash: SPEC_HASH,
+      status,
+      rationaleHash: new Uint8Array(32).fill(3),
+      rationaleUri: "https://gov.example.com/takedown.md",
+      setAt: 1n,
+      updatedAt: 1n,
+      updatedBy: addrOf(1) as never,
+      bump: 252,
+      reserved: new Uint8Array(16),
     }),
   );
 }
@@ -132,6 +187,37 @@ async function legacyPda(): Promise<string> {
     jobSpecHash: SPEC_HASH,
   });
   return String(pda);
+}
+
+async function attestorPdaOf(moderator: string): Promise<string> {
+  const [pda] = await findModerationAttestorPda({
+    attestor: moderator as never,
+  });
+  return String(pda);
+}
+
+async function blockPda(): Promise<string> {
+  const [pda] = await findModerationBlockPda({ contentHash: SPEC_HASH });
+  return String(pda);
+}
+
+async function configPda(): Promise<string> {
+  const [pda] = await findModerationConfigPda();
+  return String(pda);
+}
+
+/** A STRICT (enabled, fresh-heartbeat, authority-set) config snapshot. */
+function strictConfig(
+  overrides: Partial<listingTrust.ModerationConfigSnapshot> = {},
+): listingTrust.ModerationConfigSnapshot {
+  return {
+    exists: true,
+    moderationAuthority: MOD_AUTHORITY,
+    enabled: true,
+    updatedAt: BigInt(Math.floor(Date.now() / 1000)),
+    livenessWindowSecs: 0,
+    ...overrides,
+  };
 }
 
 function rpcAccount(data: Uint8Array) {
@@ -322,7 +408,7 @@ describe("fetchRosterAttestors (strict roster scan)", () => {
     });
   });
 
-  it("THROWS over the MAX_ROSTER_ATTESTORS bound — never silently truncates", async () => {
+  it("raises the TYPED RosterCapExceededError over the bound — never silently truncates", async () => {
     const over = Array.from(
       { length: listingTrust.MAX_ROSTER_ATTESTORS + 1 },
       (_, i) => encodeAttestor({ attestor: addrOf(1 + (i % 250)) }),
@@ -331,6 +417,9 @@ describe("fetchRosterAttestors (strict roster scan)", () => {
     await expect(listingTrust.fetchRosterAttestors(rpc)).rejects.toThrow(
       /MAX_ROSTER_ATTESTORS/,
     );
+    await expect(listingTrust.fetchRosterAttestors(rpc)).rejects.toMatchObject({
+      name: "RosterCapExceededError",
+    });
   });
 
   it("THROWS on a discriminator-matching entry that fails to decode (layout drift ≠ skip)", async () => {
@@ -360,13 +449,15 @@ describe("bondedRosterModerators (short-TTL cache)", () => {
 
   it("does NOT serve one cluster's roster snapshot to a different rpc", async () => {
     const rpcA = fakeRpc({ roster: [encodeAttestor({ attestor: MOD_FOREIGN })] });
-    const rpcB = fakeRpc({ roster: [encodeAttestor({ attestor: MOD_EXITING })] });
+    const rpcB = fakeRpc({
+      roster: [encodeAttestor({ attestor: MOD_EXITING, exitAt: 5n })],
+    });
     expect((await listingTrust.bondedRosterModerators(rpcA)).active).toEqual([
       MOD_FOREIGN,
     ]);
-    expect((await listingTrust.bondedRosterModerators(rpcB)).active).toEqual([
-      MOD_EXITING,
-    ]);
+    const b = await listingTrust.bondedRosterModerators(rpcB);
+    expect(b.active).toEqual([]);
+    expect(b.exiting.has(MOD_EXITING)).toBe(true);
     expect(rpcB.state.gpaCalls).toBe(1);
   });
 });
@@ -400,6 +491,137 @@ describe("trustedListingModerators (policy → candidate list)", () => {
     // MOD_EXITING dropped (its record reverts at the gate); MOD_OWN not
     // duplicated; roster additions come after own.
     expect(candidates).toEqual([MOD_OWN, MOD_FOREIGN]);
+  });
+});
+
+// ---------------------------------------------- config + liveness deadman
+
+describe("moderationLivenessRelaxed (mirror of the P1.3 deadman predicate)", () => {
+  const heartbeat = 1_700_000_000n;
+  const DEFAULT = listingTrust.DEFAULT_MODERATION_LIVENESS_WINDOW_SECS;
+
+  it("stays STRICT inside the default window (incl. the exact boundary), relaxes one past it", () => {
+    expect(
+      listingTrust.moderationLivenessRelaxed(heartbeat, 0, Number(heartbeat)),
+    ).toBe(false);
+    expect(
+      listingTrust.moderationLivenessRelaxed(
+        heartbeat,
+        0,
+        Number(heartbeat) + DEFAULT,
+      ),
+    ).toBe(false);
+    expect(
+      listingTrust.moderationLivenessRelaxed(
+        heartbeat,
+        0,
+        Number(heartbeat) + DEFAULT + 1,
+      ),
+    ).toBe(true);
+  });
+
+  it("honors a carved custom window and stays strict for a never-written heartbeat", () => {
+    expect(
+      listingTrust.moderationLivenessRelaxed(
+        heartbeat,
+        86_400,
+        Number(heartbeat) + 86_400,
+      ),
+    ).toBe(false);
+    expect(
+      listingTrust.moderationLivenessRelaxed(
+        heartbeat,
+        86_400,
+        Number(heartbeat) + 86_401,
+      ),
+    ).toBe(true);
+    // updated_at == 0: an account that was never written — STRICT forever.
+    expect(listingTrust.moderationLivenessRelaxed(0n, 0, NOW)).toBe(false);
+  });
+});
+
+describe("moderationConfigSnapshot", () => {
+  it("decodes authority, enabled, heartbeat and the reserved-carved window; caches per rpc", async () => {
+    const accounts = new Map<string, Uint8Array>([
+      [
+        await configPda(),
+        encodeModerationConfig({
+          moderationAuthority: MOD_AUTHORITY,
+          enabled: true,
+          updatedAt: 1_234n,
+          windowSecs: 604_800,
+        }),
+      ],
+    ]);
+    const rpc = fakeRpc({ accounts });
+    const snapshot = await listingTrust.moderationConfigSnapshot(rpc);
+    expect(snapshot).toEqual({
+      exists: true,
+      moderationAuthority: MOD_AUTHORITY,
+      enabled: true,
+      updatedAt: 1_234n,
+      livenessWindowSecs: 604_800,
+    });
+    // Cached: mutating the backing map does not change the snapshot.
+    accounts.delete(await configPda());
+    expect((await listingTrust.moderationConfigSnapshot(rpc)).exists).toBe(true);
+  });
+
+  it("a MISSING config is a definitive exists:false snapshot; the default authority reads as null", async () => {
+    expect(
+      await listingTrust.moderationConfigSnapshot(fakeRpc({ accounts: new Map() })),
+    ).toMatchObject({ exists: false, moderationAuthority: null });
+    const unset = new Map<string, Uint8Array>([
+      [
+        await configPda(),
+        encodeModerationConfig({
+          moderationAuthority: "11111111111111111111111111111111",
+        }),
+      ],
+    ]);
+    expect(
+      (await listingTrust.moderationConfigSnapshot(fakeRpc({ accounts: unset })))
+        .moderationAuthority,
+    ).toBeNull();
+  });
+});
+
+// ------------------------------------------------------------- BLOCK floor
+
+describe("isSpecHashBlocked (§5.2 BLOCK floor mirror)", () => {
+  it("true for a BLOCKED takedown, false for CLEARED (audit trail) and missing", async () => {
+    const blocked = new Map<string, Uint8Array>([
+      [
+        await blockPda(),
+        encodeModerationBlock(listingTrust.MODERATION_BLOCK_STATUS.BLOCKED),
+      ],
+    ]);
+    expect(
+      await listingTrust.isSpecHashBlocked(
+        fakeRpc({ accounts: blocked }),
+        SPEC_HASH_HEX,
+      ),
+    ).toBe(true);
+
+    const cleared = new Map<string, Uint8Array>([
+      [
+        await blockPda(),
+        encodeModerationBlock(listingTrust.MODERATION_BLOCK_STATUS.CLEARED),
+      ],
+    ]);
+    expect(
+      await listingTrust.isSpecHashBlocked(
+        fakeRpc({ accounts: cleared }),
+        SPEC_HASH_HEX,
+      ),
+    ).toBe(false);
+
+    expect(
+      await listingTrust.isSpecHashBlocked(
+        fakeRpc({ accounts: new Map() }),
+        SPEC_HASH_HEX,
+      ),
+    ).toBe(false);
   });
 });
 
@@ -673,20 +895,32 @@ describe("acquireListingAttestation", () => {
 
 // ----------------------------------------------------- end-to-end resolver
 
+async function baseAccounts(
+  extra: Array<[string, Uint8Array]> = [],
+): Promise<Map<string, Uint8Array>> {
+  return new Map<string, Uint8Array>([
+    [LISTING, encodeListing()],
+    // The store's own attestor is roster-registered (the live topology).
+    [await attestorPdaOf(MOD_OWN), encodeAttestor({ attestor: MOD_OWN })],
+    ...extra,
+  ]);
+}
+
 function resolverWith(opts: {
-  accounts?: Map<string, Uint8Array>;
-  roster?: Uint8Array[];
+  accounts: Map<string, Uint8Array>;
+  roster?: Uint8Array[] | (() => Uint8Array[]);
   failModerationReads?: boolean;
   storeModerators?: string[];
   trustPolicy?: listingTrust.ListingTrustPolicy;
   attestorEndpoint?: string | null;
   service?: ReturnType<typeof fakeModerationService>;
+  moderationConfig?: listingTrust.ModerationConfigSnapshot;
+  curation?: listingTrust.ListingHireModerationDeps["curation"];
+  negativeTtlMs?: number;
+  warnings?: string[];
 }) {
-  const accounts =
-    opts.accounts ?? new Map<string, Uint8Array>([[LISTING, encodeListing()]]);
-  if (!accounts.has(LISTING)) accounts.set(LISTING, encodeListing());
   const rpc = fakeRpc({
-    accounts,
+    accounts: opts.accounts,
     roster: opts.roster ?? [],
     failModerationReads: opts.failModerationReads ?? false,
   });
@@ -699,19 +933,24 @@ function resolverWith(opts: {
       opts.attestorEndpoint === undefined
         ? "https://attest.example/api/task-moderation/attest"
         : opts.attestorEndpoint,
+    curation: opts.curation,
     rpc,
+    moderationConfig: opts.moderationConfig ?? strictConfig(),
     fetch: service.fetchImpl,
     maxResolveRetries: 2,
     retryDelayMs: 0,
     sleep: async () => {},
+    ...(opts.negativeTtlMs !== undefined
+      ? { negativeTtlMs: opts.negativeTtlMs }
+      : {}),
+    warn: (m: string) => opts.warnings?.push(m),
   });
-  return { resolve, service, accounts, rpc };
+  return { resolve, service, rpc };
 }
 
 describe("createListingHireModerationResolver (fail-closed end to end)", () => {
   it("consumes an existing valid record WITHOUT calling the attestation service", async () => {
-    const accounts = new Map<string, Uint8Array>([
-      [LISTING, encodeListing()],
+    const accounts = await baseAccounts([
       [await moderationPdaOf(MOD_OWN), encodeModeration({ moderator: MOD_OWN })],
     ]);
     const { resolve, service } = resolverWith({ accounts });
@@ -723,11 +962,14 @@ describe("createListingHireModerationResolver (fail-closed end to end)", () => {
   });
 
   it("§12 rail: under any-bonded-attestor a FOREIGN roster attestor's record makes the listing hireable", async () => {
-    const accounts = new Map<string, Uint8Array>([
-      [LISTING, encodeListing()],
+    const accounts = await baseAccounts([
       [
         await moderationPdaOf(MOD_FOREIGN),
         encodeModeration({ moderator: MOD_FOREIGN }),
+      ],
+      [
+        await attestorPdaOf(MOD_FOREIGN),
+        encodeAttestor({ attestor: MOD_FOREIGN }),
       ],
     ]);
     const { resolve, service } = resolverWith({
@@ -743,8 +985,7 @@ describe("createListingHireModerationResolver (fail-closed end to end)", () => {
   });
 
   it("edge-list does NOT consume the foreign record (today's behavior preserved) — it re-acquires instead", async () => {
-    const accounts = new Map<string, Uint8Array>([
-      [LISTING, encodeListing()],
+    const accounts = await baseAccounts([
       [
         await moderationPdaOf(MOD_FOREIGN),
         encodeModeration({ moderator: MOD_FOREIGN }),
@@ -765,7 +1006,7 @@ describe("createListingHireModerationResolver (fail-closed end to end)", () => {
   });
 
   it("definitive miss → acquires from the store's own service, then re-discovers", async () => {
-    const accounts = new Map<string, Uint8Array>([[LISTING, encodeListing()]]);
+    const accounts = await baseAccounts();
     const ownPda = await moderationPdaOf(MOD_OWN);
     const service = fakeModerationService({
       onRecord: () => {
@@ -782,8 +1023,7 @@ describe("createListingHireModerationResolver (fail-closed end to end)", () => {
 
   it("an EXPIRED existing record triggers acquisition — it must never short-circuit as consumable", async () => {
     const ownPda = await moderationPdaOf(MOD_OWN);
-    const accounts = new Map<string, Uint8Array>([
-      [LISTING, encodeListing()],
+    const accounts = await baseAccounts([
       [
         ownPda,
         encodeModeration({
@@ -806,26 +1046,36 @@ describe("createListingHireModerationResolver (fail-closed end to end)", () => {
 
   it("BLOCKED acquisition verdict fails closed with ListingModerationBlockedError", async () => {
     const service = fakeModerationService({ verdict: "blocked" });
-    const { resolve } = resolverWith({ service });
+    const { resolve } = resolverWith({ accounts: await baseAccounts(), service });
     await expect(resolve(LISTING)).rejects.toMatchObject({
       name: "ListingModerationBlockedError",
     });
   });
 
   it("a transient RPC error during discovery PROPAGATES and never triggers a paid acquisition", async () => {
-    const { resolve, service } = resolverWith({ failModerationReads: true });
+    const { resolve, service } = resolverWith({
+      accounts: await baseAccounts(),
+      failModerationReads: true,
+    });
     await expect(resolve(LISTING)).rejects.toThrow(/transiently unavailable/);
     expect(service.calls.count).toBe(0);
   });
 
   it("miss with acquisition disabled (localnet) fails closed with an honest error", async () => {
-    const { resolve, service } = resolverWith({ attestorEndpoint: null });
+    const { resolve, service } = resolverWith({
+      accounts: await baseAccounts(),
+      attestorEndpoint: null,
+    });
     await expect(resolve(LISTING)).rejects.toThrow(/cannot be hired here/);
     expect(service.calls.count).toBe(0);
   });
 
   it("an EMPTY trusted-moderator set fails closed BEFORE any acquisition", async () => {
-    const { resolve, service } = resolverWith({ storeModerators: [] });
+    const { resolve, service } = resolverWith({
+      accounts: await baseAccounts(),
+      storeModerators: [],
+      moderationConfig: strictConfig({ moderationAuthority: null }),
+    });
     await expect(resolve(LISTING)).rejects.toThrow(/No trusted moderators/);
     expect(service.calls.count).toBe(0);
   });
@@ -838,14 +1088,343 @@ describe("createListingHireModerationResolver (fail-closed end to end)", () => {
       resolveStoreModerators: async () => [MOD_OWN],
       attestorEndpoint: null,
       rpc,
+      moderationConfig: strictConfig(),
     });
     await expect(bare(LISTING)).rejects.toThrow(/does not exist/);
   });
 
   it("acquisition that never lands a readable record times out with an actionable error", async () => {
     const service = fakeModerationService({}); // clean, but never writes the PDA
-    const { resolve } = resolverWith({ service });
+    const { resolve } = resolverWith({ accounts: await baseAccounts(), service });
     await expect(resolve(LISTING)).rejects.toThrow(/did not become readable/);
     expect(service.calls.count).toBe(1);
+  });
+});
+
+describe("F2: the §5.2 BLOCK floor in the resolver", () => {
+  it("a multisig-BLOCKED hash fails closed as blocked EVEN when a CLEAN trusted record exists", async () => {
+    const accounts = await baseAccounts([
+      [
+        await blockPda(),
+        encodeModerationBlock(listingTrust.MODERATION_BLOCK_STATUS.BLOCKED),
+      ],
+      [await moderationPdaOf(MOD_OWN), encodeModeration({ moderator: MOD_OWN })],
+    ]);
+    const { resolve, service } = resolverWith({ accounts });
+    await expect(resolve(LISTING)).rejects.toMatchObject({
+      name: "ListingModerationBlockedError",
+    });
+    expect(service.calls.count).toBe(0);
+  });
+
+  it("a miss on a BLOCKED hash NEVER pays for an acquisition (repeatably — negative-cached)", async () => {
+    const accounts = await baseAccounts([
+      [
+        await blockPda(),
+        encodeModerationBlock(listingTrust.MODERATION_BLOCK_STATUS.BLOCKED),
+      ],
+    ]);
+    const { resolve, service } = resolverWith({ accounts });
+    await expect(resolve(LISTING)).rejects.toMatchObject({
+      name: "ListingModerationBlockedError",
+    });
+    await expect(resolve(LISTING)).rejects.toMatchObject({
+      name: "ListingModerationBlockedError",
+    });
+    expect(service.calls.count).toBe(0);
+  });
+
+  it("a CLEARED takedown (audit trail) does not block", async () => {
+    const accounts = await baseAccounts([
+      [
+        await blockPda(),
+        encodeModerationBlock(listingTrust.MODERATION_BLOCK_STATUS.CLEARED),
+      ],
+      [await moderationPdaOf(MOD_OWN), encodeModeration({ moderator: MOD_OWN })],
+    ]);
+    const { resolve } = resolverWith({ accounts });
+    await expect(resolve(LISTING)).resolves.toMatchObject({
+      moderator: MOD_OWN,
+    });
+  });
+});
+
+describe("F3: the global moderation authority is a first-class candidate", () => {
+  it("an authority-authored v2 record resolves WITHOUT acquisition (no roster entry needed)", async () => {
+    const accounts = await baseAccounts([
+      [
+        await moderationPdaOf(MOD_AUTHORITY),
+        encodeModeration({ moderator: MOD_AUTHORITY }),
+      ],
+    ]);
+    const { resolve, service } = resolverWith({ accounts });
+    await expect(resolve(LISTING)).resolves.toEqual({
+      moderator: MOD_AUTHORITY,
+      source: "existing-record",
+    });
+    expect(service.calls.count).toBe(0);
+  });
+
+  it("an authority-authored LEGACY record (all pre-P1.2 records) resolves too", async () => {
+    const accounts = await baseAccounts([
+      [await legacyPda(), encodeModeration({ moderator: MOD_AUTHORITY })],
+    ]);
+    const { resolve, service } = resolverWith({ accounts });
+    await expect(resolve(LISTING)).resolves.toEqual({
+      moderator: MOD_AUTHORITY,
+      source: "existing-record",
+    });
+    expect(service.calls.count).toBe(0);
+  });
+
+  it("without the authority in the config, the same record is a miss (the pre-F3 failure)", async () => {
+    const accounts = await baseAccounts([
+      [
+        await moderationPdaOf(MOD_AUTHORITY),
+        encodeModeration({ moderator: MOD_AUTHORITY }),
+      ],
+    ]);
+    const { resolve, service } = resolverWith({
+      accounts,
+      moderationConfig: strictConfig({ moderationAuthority: null }),
+      attestorEndpoint: null,
+    });
+    await expect(resolve(LISTING)).rejects.toThrow(/cannot be hired here/);
+    expect(service.calls.count).toBe(0);
+  });
+});
+
+describe("F4: roster over-cap degrades instead of killing the network", () => {
+  const overCapRoster = () =>
+    Array.from({ length: listingTrust.MAX_ROSTER_ATTESTORS + 1 }, (_, i) =>
+      encodeAttestor({ attestor: addrOf(1 + (i % 250)) }),
+    );
+
+  it("an own-record hire still resolves with the roster over cap — and never even scans it", async () => {
+    const accounts = await baseAccounts([
+      [await moderationPdaOf(MOD_OWN), encodeModeration({ moderator: MOD_OWN })],
+    ]);
+    const { resolve, rpc } = resolverWith({
+      accounts,
+      roster: overCapRoster,
+      trustPolicy: "any-bonded-attestor",
+    });
+    await expect(resolve(LISTING)).resolves.toMatchObject({
+      moderator: MOD_OWN,
+    });
+    // Own-set discovery runs FIRST: the over-cap roster was never consulted.
+    expect(rpc.state.gpaCalls).toBe(0);
+  });
+
+  it("own miss + over-cap: degrades with a loud warning, DISABLES acquisition, fails honestly", async () => {
+    const warnings: string[] = [];
+    const { resolve, service } = resolverWith({
+      accounts: await baseAccounts(),
+      roster: overCapRoster,
+      trustPolicy: "any-bonded-attestor",
+      warnings,
+    });
+    await expect(resolve(LISTING)).rejects.toThrow(/degraded/);
+    // The paid side effect must NOT fire off a silently-shrunken trust set.
+    expect(service.calls.count).toBe(0);
+    expect(warnings.length).toBe(1);
+    expect(warnings[0]).toMatch(/MAX_ROSTER_ATTESTORS/);
+  });
+
+  it("a TRANSIENT roster error still propagates (only the typed cap error degrades)", async () => {
+    const { resolve, service } = resolverWith({
+      accounts: await baseAccounts(),
+      roster: () => {
+        throw new Error("roster rpc transiently unavailable");
+      },
+      trustPolicy: "any-bonded-attestor",
+    });
+    await expect(resolve(LISTING)).rejects.toThrow(/transiently unavailable/);
+    expect(service.calls.count).toBe(0);
+  });
+});
+
+describe("F5: acquisition cost-amplification hardening", () => {
+  it("single-flight: concurrent misses for one listing fire exactly ONE paid acquisition", async () => {
+    const accounts = await baseAccounts();
+    const ownPda = await moderationPdaOf(MOD_OWN);
+    const service = fakeModerationService({
+      onRecord: () => {
+        accounts.set(ownPda, encodeModeration({ moderator: MOD_OWN }));
+      },
+    });
+    const { resolve } = resolverWith({ accounts, service });
+    const [a, b, c] = await Promise.all([
+      resolve(LISTING),
+      resolve(LISTING),
+      resolve(LISTING),
+    ]);
+    expect(a.moderator).toBe(MOD_OWN);
+    expect(b).toEqual(a);
+    expect(c).toEqual(a);
+    expect(service.calls.count).toBe(1);
+  });
+
+  it("negative cache: a failed acquisition is not retried (or re-paid) within the TTL", async () => {
+    const service = fakeModerationService({ attestation: false }); // clean but recordless
+    const { resolve } = resolverWith({
+      accounts: await baseAccounts(),
+      service,
+      negativeTtlMs: 60_000,
+    });
+    await expect(resolve(LISTING)).rejects.toThrow(/could not be acquired/);
+    await expect(resolve(LISTING)).rejects.toThrow(/could not be acquired/);
+    expect(service.calls.count).toBe(1);
+  });
+
+  it("catalog gate: a listing outside the store's curation NEVER resolves or acquires", async () => {
+    const { resolve, service } = resolverWith({
+      accounts: await baseAccounts(),
+      curation: { providers: [addrOf(99) as never], requireModeration: true },
+    });
+    await expect(resolve(LISTING)).rejects.toThrow(/not part of this store/);
+    expect(service.calls.count).toBe(0);
+  });
+
+  it("catalog gate: category curation admits matching listings and rejects others", async () => {
+    const inCatalog = await baseAccounts([
+      [await moderationPdaOf(MOD_OWN), encodeModeration({ moderator: MOD_OWN })],
+    ]);
+    inCatalog.set(LISTING, encodeListing({ category: "code-generation" }));
+    const admitted = resolverWith({
+      accounts: inCatalog,
+      curation: { categories: ["code-generation"], requireModeration: true },
+    });
+    await expect(admitted.resolve(LISTING)).resolves.toMatchObject({
+      moderator: MOD_OWN,
+    });
+
+    const outOfCatalog = await baseAccounts();
+    outOfCatalog.set(LISTING, encodeListing({ category: "art" }));
+    const rejected = resolverWith({
+      accounts: outOfCatalog,
+      curation: { categories: ["code-generation"], requireModeration: true },
+    });
+    await expect(rejected.resolve(LISTING)).rejects.toThrow(
+      /not part of this store/,
+    );
+    expect(rejected.service.calls.count).toBe(0);
+  });
+
+  it("a paused/retired listing never resolves or acquires", async () => {
+    const accounts = await baseAccounts();
+    accounts.set(LISTING, encodeListing({ state: 1 }));
+    const { resolve, service } = resolverWith({ accounts });
+    await expect(resolve(LISTING)).rejects.toThrow(/not active/);
+    expect(service.calls.count).toBe(0);
+  });
+});
+
+describe("F6: the P1.3 liveness deadman / disabled gate", () => {
+  it("moderation DISABLED on-chain → listing-agnostic moderator, NO acquisition", async () => {
+    const { resolve, service } = resolverWith({
+      accounts: await baseAccounts(),
+      moderationConfig: strictConfig({ enabled: false }),
+    });
+    await expect(resolve(LISTING)).resolves.toEqual({
+      moderator: MOD_OWN,
+      source: "relaxed-gate",
+    });
+    expect(service.calls.count).toBe(0);
+  });
+
+  it("deadman RELAXED (silent authority past the window) → relaxed-gate, no acquisition", async () => {
+    const staleHeartbeat = BigInt(
+      Math.floor(Date.now() / 1000) -
+        listingTrust.DEFAULT_MODERATION_LIVENESS_WINDOW_SECS -
+        60,
+    );
+    const { resolve, service } = resolverWith({
+      accounts: await baseAccounts(),
+      moderationConfig: strictConfig({ updatedAt: staleHeartbeat }),
+    });
+    await expect(resolve(LISTING)).resolves.toEqual({
+      moderator: MOD_OWN,
+      source: "relaxed-gate",
+    });
+    expect(service.calls.count).toBe(0);
+  });
+
+  it("a FRESH heartbeat stays strict: the same miss goes to acquisition, not relaxed-gate", async () => {
+    const accounts = await baseAccounts();
+    const ownPda = await moderationPdaOf(MOD_OWN);
+    const service = fakeModerationService({
+      onRecord: () => {
+        accounts.set(ownPda, encodeModeration({ moderator: MOD_OWN }));
+      },
+    });
+    const { resolve } = resolverWith({
+      accounts,
+      service,
+      moderationConfig: strictConfig(), // fresh updatedAt
+    });
+    await expect(resolve(LISTING)).resolves.toMatchObject({
+      source: "acquired",
+    });
+    expect(service.calls.count).toBe(1);
+  });
+
+  it("the BLOCK floor is NEVER relaxed: blocked hash + relaxed gate still fails closed", async () => {
+    const accounts = await baseAccounts([
+      [
+        await blockPda(),
+        encodeModerationBlock(listingTrust.MODERATION_BLOCK_STATUS.BLOCKED),
+      ],
+    ]);
+    const { resolve, service } = resolverWith({
+      accounts,
+      moderationConfig: strictConfig({ enabled: false }),
+    });
+    await expect(resolve(LISTING)).rejects.toMatchObject({
+      name: "ListingModerationBlockedError",
+    });
+    expect(service.calls.count).toBe(0);
+  });
+});
+
+describe("unlockability: a record's author must be able to unlock the gate", () => {
+  it("skips a record authored by an EXITING attestor and consumes the authority's instead", async () => {
+    const accounts = await baseAccounts([
+      [await moderationPdaOf(MOD_OWN), encodeModeration({ moderator: MOD_OWN })],
+      [
+        await moderationPdaOf(MOD_AUTHORITY),
+        encodeModeration({ moderator: MOD_AUTHORITY }),
+      ],
+    ]);
+    // MOD_OWN's roster entry is EXITING → its record cannot unlock.
+    accounts.set(
+      await attestorPdaOf(MOD_OWN),
+      encodeAttestor({ attestor: MOD_OWN, exitAt: 1_700_000_000n }),
+    );
+    const { resolve } = resolverWith({ accounts });
+    await expect(resolve(LISTING)).resolves.toEqual({
+      moderator: MOD_AUTHORITY,
+      source: "existing-record",
+    });
+  });
+
+  it("a record whose author has NO roster entry and is not the authority is never named", async () => {
+    const accounts = await baseAccounts([
+      [
+        await moderationPdaOf(MOD_FOREIGN),
+        encodeModeration({ moderator: MOD_FOREIGN }),
+      ],
+      // No attestor account for MOD_FOREIGN → revoked/never-registered.
+    ]);
+    const { resolve, service } = resolverWith({
+      accounts,
+      // Trust MOD_FOREIGN explicitly (a store override) — the gate still
+      // rejects it without a roster entry, so the resolver must too.
+      storeModerators: [MOD_FOREIGN],
+      moderationConfig: strictConfig({ moderationAuthority: null }),
+      attestorEndpoint: null,
+    });
+    await expect(resolve(LISTING)).rejects.toThrow(/cannot be hired here/);
+    expect(service.calls.count).toBe(0);
   });
 });

@@ -64,19 +64,26 @@ import { detectEphemeralHosting } from "../config/go-live.js";
 // own module; re-exported here so `@tetsuo-ai/store-core/activation/server`
 // stays the single server-side entrypoint.
 export {
+  ACQUISITION_NEGATIVE_TTL_MS,
   acquireListingAttestation,
   bondedRosterModerators,
   createListingHireModerationResolver,
+  DEFAULT_MODERATION_LIVENESS_WINDOW_SECS,
   discoverListingModerationRecord,
   EXPIRY_SAFETY_WINDOW_SECS,
   fetchRosterAttestors,
   isConsumableListingModeration,
+  isSpecHashBlocked,
   LISTING_MODERATION_STATUS,
   ListingModerationBlockedError,
   listingsModerationUrl,
   MAX_CONSUMABLE_RISK_SCORE,
   MAX_ROSTER_ATTESTORS,
+  MODERATION_BLOCK_STATUS,
+  moderationConfigSnapshot,
+  moderationLivenessRelaxed,
   resolveListingTrustPolicy,
+  RosterCapExceededError,
   trustedListingModerators,
   __clearListingTrustCachesForTests,
   type DiscoveredListingRecord,
@@ -84,6 +91,7 @@ export {
   type ListingHireModeration,
   type ListingHireModerationDeps,
   type ListingTrustPolicy,
+  type ModerationConfigSnapshot,
   type RosterAttestorEntry,
   type RosterSnapshot,
 } from "./listing-trust.js";
@@ -527,10 +535,18 @@ export const DEFAULT_ACTIVATION_RATE_LIMIT: RateLimitOptions = {
   windowMs: 60_000,
 };
 
+/** Hard bound on distinct client-key windows the limiter tracks at once. */
+const RATE_LIMITER_MAX_KEYS = 10_000;
+
 /**
  * A small in-memory fixed-window rate limiter (per Node process — enough to
  * blunt drive-by griefing of a single store deploy; it is NOT a distributed
  * limiter). Returns `true` when the request is allowed.
+ *
+ * Memory-bounded: expired windows are pruned opportunistically, and past
+ * {@link RATE_LIMITER_MAX_KEYS} live keys the OLDEST windows are evicted —
+ * a client-key-rotation attack can therefore reset ITS OWN buckets but can
+ * never grow the map without bound.
  */
 export function createFixedWindowRateLimiter(
   options: RateLimitOptions,
@@ -538,10 +554,16 @@ export function createFixedWindowRateLimiter(
   const windows = new Map<string, { start: number; count: number }>();
   return function allow(key: string): boolean {
     const now = Date.now();
-    // Opportunistic prune so the map cannot grow unboundedly across windows.
-    if (windows.size > 10_000) {
+    if (windows.size >= RATE_LIMITER_MAX_KEYS) {
+      // Prune expired windows first; if rotation keeps the map full inside
+      // one window, evict oldest-inserted until back under the bound.
       for (const [k, w] of windows) {
         if (now - w.start >= options.windowMs) windows.delete(k);
+      }
+      while (windows.size >= RATE_LIMITER_MAX_KEYS) {
+        const oldest = windows.keys().next();
+        if (oldest.done) break;
+        windows.delete(oldest.value);
       }
     }
     const current = windows.get(key);
@@ -554,11 +576,34 @@ export function createFixedWindowRateLimiter(
   };
 }
 
-/** Best-effort client key for rate limiting (proxy headers, then a bucket). */
-function clientKeyOf(request: Request): string {
+/**
+ * Best-effort client key for rate limiting. Trust order matters — the
+ * listing GET leg can trigger a PAID acquisition, so the key must not be
+ * attacker-rotatable with one request header:
+ *
+ * 1. `x-real-ip` — SET (overwritten) by the platform proxy on the hosts the
+ *    templates deploy to (Vercel / Netlify / Cloudflare), so a client cannot
+ *    spoof it through them;
+ * 2. the RIGHTMOST `x-forwarded-for` entry — appended by the NEAREST
+ *    (trusted) proxy; the leftmost entries are client-supplied and are
+ *    deliberately ignored;
+ * 3. `"unknown"` — no proxy headers at all (direct exposure): all such
+ *    requests share one bucket, which throttles conservatively rather than
+ *    letting every request mint a fresh key.
+ *
+ * Deployments with a different proxy topology can override the whole
+ * function via {@link ActivateJobSpecHandlerDeps.clientKey}.
+ */
+export function clientKeyOf(request: Request): string {
+  const real = request.headers.get("x-real-ip")?.trim();
+  if (real) return real;
   const fwd = request.headers.get("x-forwarded-for");
-  if (fwd) return fwd.split(",")[0]!.trim();
-  return request.headers.get("x-real-ip") ?? "unknown";
+  if (fwd) {
+    const hops = fwd.split(",");
+    const nearest = hops[hops.length - 1]!.trim();
+    if (nearest) return nearest;
+  }
+  return "unknown";
 }
 
 // ------------------------------------------------------------ route handler
@@ -607,6 +652,13 @@ export interface ActivateJobSpecHandlerDeps {
    * {@link DEFAULT_ACTIVATION_RATE_LIMIT}; pass `false` to disable (tests).
    */
   rateLimit?: RateLimitOptions | false;
+  /**
+   * Client-key derivation for the rate limiter. Defaults to
+   * {@link clientKeyOf} (platform-set `x-real-ip`, else the rightmost —
+   * trusted-proxy-appended — `x-forwarded-for` hop, else one shared
+   * bucket). Override for deployments with a different proxy topology.
+   */
+  clientKey?: (request: Request) => string;
   /** Request-size bound. Defaults to {@link DEFAULT_MAX_REQUEST_BYTES}. */
   maxRequestBytes?: number;
   /** Canonical-JSON bound. Defaults to {@link DEFAULT_MAX_CANONICAL_BYTES}. */
@@ -666,6 +718,7 @@ export function createActivateJobSpecHandler({
   resolveHireModerator,
   resolveListingHireModeration,
   rateLimit = DEFAULT_ACTIVATION_RATE_LIMIT,
+  clientKey = clientKeyOf,
   maxRequestBytes = DEFAULT_MAX_REQUEST_BYTES,
   maxCanonicalBytes = DEFAULT_MAX_CANONICAL_BYTES,
 }: ActivateJobSpecHandlerDeps): (request: Request) => Promise<Response> {
@@ -705,7 +758,7 @@ export function createActivateJobSpecHandler({
         resolveListingHireModeration &&
         PDA_RE.test(listingParam)
       ) {
-        if (allowRequest && !allowRequest(clientKeyOf(request))) {
+        if (allowRequest && !allowRequest(clientKey(request))) {
           return json(
             { error: "Too many activation requests; retry shortly." },
             429,
@@ -753,7 +806,7 @@ export function createActivateJobSpecHandler({
       return json({ error: "Method not allowed." }, 405);
     }
 
-    if (allowRequest && !allowRequest(clientKeyOf(request))) {
+    if (allowRequest && !allowRequest(clientKey(request))) {
       return json(
         { error: "Too many activation requests; retry shortly." },
         429,
@@ -1187,6 +1240,9 @@ export function resolveActivationBackend(
     trustPolicy,
     resolveStoreModerators: async () => [await resolveHireModerator()],
     attestorEndpoint: acquisitionEndpoint,
+    // Catalog gate: the GET leg only resolves (and only ever ACQUIRES for)
+    // listings this store actually carries under its curation config.
+    curation: config.curation,
   });
 
   const base = {

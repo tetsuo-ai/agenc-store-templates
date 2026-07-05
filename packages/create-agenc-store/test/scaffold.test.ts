@@ -238,6 +238,18 @@ describe.each(["marketplace-store", "provider-storefront", "vertical-store"] as 
         expect(config).toContain(`providers: ["${TEST_REFERRER}"]`);
       }
 
+      // §12 roster-trust rail (review finding F1): every scaffolded
+      // activation route must wire the LISTING-scoped resolver end-to-end —
+      // without this line the rail is inert and a cross-node hire names the
+      // store's own attestor blind, reverting on-chain AFTER the buyer signs.
+      const activationRoute = await readFile(
+        path.join(target, "src/app/api/agenc/activate-job-spec/route.ts"),
+        "utf8",
+      );
+      expect(activationRoute).toContain(
+        "resolveListingHireModeration: backend.resolveListingHireModeration",
+      );
+
       // The package name was rewritten.
       const pkg = JSON.parse(
         await readFile(path.join(target, "package.json"), "utf8"),
