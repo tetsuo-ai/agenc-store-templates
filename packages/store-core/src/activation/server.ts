@@ -50,8 +50,43 @@ import {
   normalizeStoreJobSpec,
   type StoreJobSpecPayload,
 } from "./job-spec.js";
+import {
+  createListingHireModerationResolver,
+  ListingModerationBlockedError,
+  resolveListingTrustPolicy,
+  type ListingHireModeration,
+  type ListingTrustPolicy,
+} from "./listing-trust.js";
 import type { StoreConfig } from "../config/schema.js";
 import { detectEphemeralHosting } from "../config/go-live.js";
+
+// The LISTING-trust rail (roster policy + hire-time acquisition) lives in its
+// own module; re-exported here so `@tetsuo-ai/store-core/activation/server`
+// stays the single server-side entrypoint.
+export {
+  acquireListingAttestation,
+  bondedRosterModerators,
+  createListingHireModerationResolver,
+  discoverListingModerationRecord,
+  EXPIRY_SAFETY_WINDOW_SECS,
+  fetchRosterAttestors,
+  isConsumableListingModeration,
+  LISTING_MODERATION_STATUS,
+  ListingModerationBlockedError,
+  listingsModerationUrl,
+  MAX_CONSUMABLE_RISK_SCORE,
+  MAX_ROSTER_ATTESTORS,
+  resolveListingTrustPolicy,
+  trustedListingModerators,
+  __clearListingTrustCachesForTests,
+  type DiscoveredListingRecord,
+  type ListingAcquisitionOutcome,
+  type ListingHireModeration,
+  type ListingHireModerationDeps,
+  type ListingTrustPolicy,
+  type RosterAttestorEntry,
+  type RosterSnapshot,
+} from "./listing-trust.js";
 
 /**
  * The marketplace-managed task-moderation attestation endpoint used when no
@@ -557,6 +592,17 @@ export interface ActivateJobSpecHandlerDeps {
    */
   resolveHireModerator?: (() => Promise<string>) | undefined;
   /**
+   * LISTING-scoped hire-moderator resolution (§12 roster-trust rail), served
+   * on `GET ?listing=<pda>`: policy-aware trusted-record discovery plus
+   * hire-time acquisition from the store's own attestation service.
+   * {@link resolveActivationBackend} wires
+   * {@link createListingHireModerationResolver}; omit to keep the legacy
+   * listing-agnostic GET only.
+   */
+  resolveListingHireModeration?:
+    | ((listing: string) => Promise<ListingHireModeration>)
+    | undefined;
+  /**
    * Per-client rate limit. Defaults to
    * {@link DEFAULT_ACTIVATION_RATE_LIMIT}; pass `false` to disable (tests).
    */
@@ -618,6 +664,7 @@ export function createActivateJobSpecHandler({
   verifyTask,
   moderatorOverride,
   resolveHireModerator,
+  resolveListingHireModeration,
   rateLimit = DEFAULT_ACTIVATION_RATE_LIMIT,
   maxRequestBytes = DEFAULT_MAX_REQUEST_BYTES,
   maxCanonicalBytes = DEFAULT_MAX_CANONICAL_BYTES,
@@ -628,20 +675,78 @@ export function createActivateJobSpecHandler({
   return async function activateJobSpec(request: Request): Promise<Response> {
     // GET = the hire-moderator info leg (P1.2): the browser needs a moderator
     // pubkey for the hire gates BEFORE any attestation response exists.
-    if (request.method === "GET" && resolveHireModerator) {
-      try {
-        const moderator = await resolveHireModerator();
-        return json({ moderator });
-      } catch (cause) {
-        return json(
-          {
-            error:
-              cause instanceof Error
-                ? cause.message
-                : "Hire moderator could not be resolved.",
-          },
-          502,
-        );
+    //
+    // `?listing=<pda>` (roster-trust rail): resolve the moderator whose
+    // record ACTUALLY EXISTS and is trusted under the store's trust policy —
+    // acquiring a fresh attestation from the store's own service when none
+    // does. Fail-closed: BLOCKED → 422 `{ blocked: true }`, unresolvable →
+    // 502 — the browser never names a guessed moderator.
+    if (request.method === "GET") {
+      const listingParam = (() => {
+        try {
+          return new URL(request.url).searchParams.get("listing");
+        } catch {
+          return null;
+        }
+      })();
+      if (
+        listingParam &&
+        resolveListingHireModeration &&
+        !PDA_RE.test(listingParam)
+      ) {
+        // The client explicitly asked for LISTING-scoped resolution with a
+        // malformed PDA — answer honestly instead of silently falling back
+        // to the listing-agnostic moderator (which may have no record for
+        // the listing the client actually wants to hire from).
+        return json({ error: "listing must be a base58 listing PDA." }, 400);
+      }
+      if (
+        listingParam &&
+        resolveListingHireModeration &&
+        PDA_RE.test(listingParam)
+      ) {
+        if (allowRequest && !allowRequest(clientKeyOf(request))) {
+          return json(
+            { error: "Too many activation requests; retry shortly." },
+            429,
+          );
+        }
+        try {
+          const resolved = await resolveListingHireModeration(listingParam);
+          return json({
+            moderator: resolved.moderator,
+            source: resolved.source,
+          });
+        } catch (cause) {
+          if (cause instanceof ListingModerationBlockedError) {
+            return json({ error: cause.message, blocked: true }, 422);
+          }
+          return json(
+            {
+              error:
+                cause instanceof Error
+                  ? cause.message
+                  : "Listing hire moderator could not be resolved.",
+            },
+            502,
+          );
+        }
+      }
+      if (resolveHireModerator) {
+        try {
+          const moderator = await resolveHireModerator();
+          return json({ moderator });
+        } catch (cause) {
+          return json(
+            {
+              error:
+                cause instanceof Error
+                  ? cause.message
+                  : "Hire moderator could not be resolved.",
+            },
+            502,
+          );
+        }
       }
     }
     if (request.method && request.method !== "POST") {
@@ -821,6 +926,11 @@ export function createActivateJobSpecHandler({
 export interface ActivationEnv {
   /** RPC override (also used by the localnet sandbox attestor). */
   AGENC_RPC_URL?: string | undefined;
+  /**
+   * Deploy-env fallback for `moderation.trustPolicy` (§12 roster-trust rail).
+   * Exact value `any-bonded-attestor` only; the explicit config field wins.
+   */
+  AGENC_MODERATION_TRUST?: string | undefined;
   /** Bearer token for a PROTECTED custom attestor (sovereignty setups only). */
   AGENC_TASK_ATTESTOR_TOKEN?: string | undefined;
   /** agenc-protocol checkout override (localnet sandbox key discovery). */
@@ -858,6 +968,21 @@ export interface ActivationBackend {
    * `GET /v1/info` (cached per process), else the localnet sandbox key.
    */
   resolveHireModerator: () => Promise<string>;
+  /**
+   * LISTING-scoped hire-moderator resolution (§12 roster-trust rail) for the
+   * route's `GET ?listing=<pda>` leg: policy-aware trusted-record discovery
+   * plus hire-time acquisition from the store's own attestation service
+   * ({@link createListingHireModerationResolver}). Fail-closed end to end.
+   */
+  resolveListingHireModeration: (
+    listing: string,
+  ) => Promise<ListingHireModeration>;
+  /**
+   * The effective LISTING trust policy (`moderation.trustPolicy` config, else
+   * the `AGENC_MODERATION_TRUST` env, else `edge-list`). Observability, not
+   * behavior — the resolver above already embeds it.
+   */
+  trustPolicy: ListingTrustPolicy;
   /** Where hosted specs are written (for the GET route). */
   jobSpecDirectory: string;
   /** Which attestor was resolved (observability, not behavior). */
@@ -1042,11 +1167,35 @@ export function resolveActivationBackend(
     return fetchAttestorModerator({ attestorEndpoint: attestorEndpointForInfo });
   };
 
+  // §12 roster-trust rail: the LISTING-scoped hire-moderator resolver served
+  // on `GET ?listing=<pda>`. The store's own moderator set is exactly what
+  // `resolveHireModerator` names today (override → localnet sandbox key →
+  // attestor /v1/info), resolved lazily and PROPAGATING failures — a
+  // transient /v1/info outage must never shrink the trusted set into an
+  // unnecessary paid acquisition. Acquisition is disabled on the localnet
+  // sandbox (its attestor signs directly; there is no HTTP listings service).
+  const trustPolicy = resolveListingTrustPolicy(
+    config.moderation?.trustPolicy,
+    env,
+  );
+  const acquisitionEndpoint =
+    config.network === "localnet" && !config.moderation?.attestorEndpoint
+      ? null
+      : attestorEndpointForInfo;
+  const resolveListingHireModeration = createListingHireModerationResolver({
+    rpcUrl: env.AGENC_RPC_URL ?? defaultRpcUrlForNetwork(config.network),
+    trustPolicy,
+    resolveStoreModerators: async () => [await resolveHireModerator()],
+    attestorEndpoint: acquisitionEndpoint,
+  });
+
   const base = {
     storeJobSpec,
     verifyTask,
     moderatorOverride,
     resolveHireModerator,
+    resolveListingHireModeration,
+    trustPolicy,
     jobSpecDirectory,
     hosting,
     hostingIssue,
