@@ -395,17 +395,25 @@ export function HireActivationButton({
       };
       // P1.2: the hire gate names the moderator whose LISTING attestation it
       // consumes. Resolve it BEFORE any money moves — explicit input override
-      // first, else the store's activation route (config override → the
-      // attestation service's /v1/info, cached per session). Fail-closed: a
-      // resolution failure aborts HERE, before the escrow is funded (and is
-      // surfaced through state — it happens outside the flow mutation, so the
-      // flow's own error state never sees it).
+      // first, else the store's activation route — LISTING-SCOPED (§12
+      // roster-trust rail): `?listing=<pda>` resolves the moderator whose
+      // consumable record ACTUALLY EXISTS for this listing (own attestor /
+      // global authority / any bonded roster attestor under the store's
+      // trust policy), acquiring a fresh attestation on a miss. The
+      // listing-agnostic answer could name a moderator with NO record for
+      // this listing — a cross-node hire would revert AFTER the buyer
+      // signed. Fail-closed: a resolution failure aborts HERE, before the
+      // escrow is funded (and is surfaced through state — it happens outside
+      // the flow mutation, so the flow's own error state never sees it).
       let hireModerator: HumanlessHireFlowHireInput["moderator"];
       try {
         hireModerator =
           hireInput.moderator ??
           address(
-            await fetchStoreHireModerator({ endpoint: activationEndpoint }),
+            await fetchStoreHireModerator({
+              endpoint: activationEndpoint,
+              listing: String(listing.address),
+            }),
           );
       } catch (cause) {
         setRetryHostError(

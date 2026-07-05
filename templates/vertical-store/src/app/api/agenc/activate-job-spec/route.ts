@@ -7,10 +7,15 @@
  * moderator }` so the buyer's wallet can sign `set_task_job_spec` naming the
  * P1.2 `moderator` whose attestation record the gate consumes.
  *
- * `GET` serves the hire-moderator info leg (`{ moderator }`): the pubkey the
- * P1.2 HIRE gates name, resolved server-side from the optional
- * `moderation.moderator` config override or the attestation service's
- * `GET /v1/info` (cached).
+ * `GET` serves the hire-moderator info leg. `GET ?listing=<pda>` (the §12
+ * roster-trust rail) resolves the moderator whose consumable ListingModeration
+ * record ACTUALLY EXISTS for that listing — own attestor, the global
+ * moderation authority, or (under `moderation.trustPolicy:
+ * "any-bonded-attestor"`) any bonded roster attestor — acquiring a fresh
+ * attestation from the store's own service on a miss (BLOCKED fails closed).
+ * A bare `GET` keeps serving the legacy listing-agnostic `{ moderator }`,
+ * resolved from the optional `moderation.moderator` config override or the
+ * attestation service's `GET /v1/info` (cached).
  *
  * ZERO moderation configuration is required (invisible-by-default): the
  * attestation is marketplace-managed automatically — on localnet the dev
@@ -42,6 +47,10 @@ const handler = createActivateJobSpecHandler({
   // leg serves the hire-gate moderator.
   moderatorOverride: backend.moderatorOverride,
   resolveHireModerator: backend.resolveHireModerator,
+  // §12 roster-trust rail: the LISTING-scoped GET leg. Without this line a
+  // cross-node hire names the store's own attestor blind and reverts
+  // on-chain after the buyer signs.
+  resolveListingHireModeration: backend.resolveListingHireModeration,
 });
 
 export async function POST(request: Request): Promise<Response> {

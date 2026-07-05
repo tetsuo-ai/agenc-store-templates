@@ -1,6 +1,6 @@
 {
   "name": "@tetsuo-ai/store-core",
-  "version": "0.5.1",
+  "version": "0.6.0",
   "description": "Shared config schema, SEO helpers, page sections, and the local sandbox bootstrap consumed by every AgenC store template (PLAN_2 Part C).",
   "type": "module",
   "main": "./dist/index.cjs",

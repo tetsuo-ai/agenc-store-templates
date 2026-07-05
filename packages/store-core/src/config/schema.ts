@@ -328,6 +328,23 @@ export const moderationSchema = z
      * disclose its moderator itself.
      */
     moderator: base58Address.optional(),
+    /**
+     * OPTIONAL roster-trust policy for LISTING moderation records at hire
+     * time (§12 roster-trust consumption rail):
+     *
+     * - `"edge-list"` (the default when unset — today's exact behavior): the
+     *   store consumes only records by its OWN attestor (`moderator` override
+     *   or the attestation service's signer).
+     * - `"any-bonded-attestor"`: the on-chain P1.2 roster is the trust root —
+     *   a CLEAN record by ANY registered, non-exiting `ModerationAttestor`
+     *   makes a listing hireable here (bond/exit state verified on-chain at
+     *   read time). Enables hiring cross-node supply attested by another
+     *   marketplace's roster attestor without re-attestation.
+     *
+     * The program's consumption gates stay the enforcement point; this only
+     * selects whose records THIS store is willing to name at the hire gate.
+     */
+    trustPolicy: z.enum(["edge-list", "any-bonded-attestor"]).optional(),
   })
   .strict();
 

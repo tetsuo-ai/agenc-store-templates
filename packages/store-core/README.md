@@ -61,7 +61,7 @@ The shape is defined once (WP-F4) as the JSON Schema document served at
 byte-identical copy at `schemas/agenc.agentCard.v1.json`, guarded by a
 byte-equality fixture test (the sharing mechanism until the two repos share a
 schema package). `parseAgentCard` reads untrusted card JSON: it accepts the
-unified id, plus — deprecated, through 0.5.x only (removal: 0.6.0, per
+unified id, plus — deprecated, through 0.6.x only (removal: 0.7.0, per
 agenc-protocol `docs/VERSIONING.md`) — the pre-unification
 `agenc.agent-card/v1` shape, up-converted so callers only ever see (and
 re-emit) the unified shape.

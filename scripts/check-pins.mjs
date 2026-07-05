@@ -38,7 +38,9 @@ const SUPPORT_MATRIX = {
   "@tetsuo-ai/marketplace-tools": { min: "0.4.0", maxExclusive: "0.5.0" },
   "@tetsuo-ai/marketplace-mcp": { min: "0.4.0", maxExclusive: "0.5.0" },
   "@tetsuo-ai/marketplace-moderation": { min: "0.1.0", maxExclusive: "0.2.0" },
-  "@tetsuo-ai/store-core": { min: "0.5.0", maxExclusive: "0.6.0" },
+  // 0.6.0 (roster-trust rail) is ADDITIVE on the same program wire as 0.5.x —
+  // both minors stay in-matrix until a wire change retires 0.5.x.
+  "@tetsuo-ai/store-core": { min: "0.5.0", maxExclusive: "0.7.0" },
 };
 
 const DEP_SECTIONS = [
@@ -160,4 +162,4 @@ if (checked === 0) {
   process.exit(1);
 }
 
-console.log(`check:pins OK — ${checked} @tetsuo-ai pin(s) inside the support matrix (sdk >=0.8 <0.9, react/tools/mcp >=0.4 <0.5, store-core >=0.5 <0.6).`);
+console.log(`check:pins OK — ${checked} @tetsuo-ai pin(s) inside the support matrix (sdk >=0.8 <0.9, react/tools/mcp >=0.4 <0.5, store-core >=0.5 <0.7).`);

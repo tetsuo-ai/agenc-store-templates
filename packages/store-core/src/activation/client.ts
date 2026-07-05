@@ -150,31 +150,56 @@ export function createStoreActivationHost<TJobSpec = StoreJobSpecDraft>(
   };
 }
 
-/** Per-session cache for {@link fetchStoreHireModerator} (keyed by endpoint). */
+/**
+ * Per-session cache for {@link fetchStoreHireModerator}, keyed by
+ * `endpoint#listing`. Successful resolutions only — failures (including 422
+ * BLOCKED) are never cached here.
+ */
 const hireModeratorCache = new Map<string, string>();
+
+/** Options for {@link fetchStoreHireModerator}. */
+export interface FetchStoreHireModeratorOptions
+  extends StoreActivationHostOptions {
+  /**
+   * The ServiceListing PDA being hired (§12 roster-trust rail). When set, the
+   * route resolves the moderator whose consumable record ACTUALLY EXISTS for
+   * THIS listing (own attestor, global authority, or — under
+   * `moderation.trustPolicy: "any-bonded-attestor"` — any bonded roster
+   * attestor), acquiring a fresh attestation from the store's own service on
+   * a miss. Omit for the legacy listing-agnostic lookup (pre-rail stores).
+   */
+  listing?: string;
+}
 
 /**
  * Resolve the moderator pubkey the P1.2 HIRE gates name
  * (`hire_from_listing[_humanless]`), for flows where no fresh attestation
- * response exists yet: `GET` the store's own activation route, which sources
- * it server-side from the `moderation.moderator` config override or the
- * attestation service's `GET /v1/info`. Cached per session — the store's
- * attestor signer does not change mid-session.
+ * response exists yet: `GET` the store's own activation route. Pass
+ * `listing` (ALWAYS pass it when hiring a specific listing) so the store
+ * resolves per-listing via the §12 roster-trust rail — the listing-agnostic
+ * answer can name a moderator that holds NO record for the listing, which
+ * reverts on-chain after signing. Cached per (endpoint, listing) session.
  *
- * @param options - Endpoint / fetch overrides ({@link StoreActivationHostOptions}).
+ * @param options - Endpoint / listing / fetch overrides.
  * @returns The base58 moderator pubkey. Throws (fail-closed) when the store
  *   cannot name one — a guessed moderator would only fail on-chain later.
  */
 export async function fetchStoreHireModerator(
-  options: StoreActivationHostOptions = {},
+  options: FetchStoreHireModeratorOptions = {},
 ): Promise<string> {
   const endpoint = options.endpoint ?? DEFAULT_ACTIVATION_ROUTE;
-  const cached = hireModeratorCache.get(endpoint);
+  const listing = options.listing?.trim();
+  const url = listing
+    ? `${endpoint}${endpoint.includes("?") ? "&" : "?"}listing=${encodeURIComponent(listing)}`
+    : endpoint;
+  const cacheKey = `${endpoint}#${listing ?? ""}`;
+  const cached = hireModeratorCache.get(cacheKey);
   if (cached) return cached;
   const fetchImpl = options.fetch ?? globalThis.fetch;
-  const response = await fetchImpl(endpoint, { method: "GET" });
+  const response = await fetchImpl(url, { method: "GET" });
   const body = (await response.json().catch(() => null)) as {
     moderator?: unknown;
+    blocked?: boolean;
     error?: string;
   } | null;
   if (!response.ok) {
@@ -193,6 +218,6 @@ export async function fetchStoreHireModerator(
         "moderation.moderator in agenc.config.ts.",
     );
   }
-  hireModeratorCache.set(endpoint, moderator);
+  hireModeratorCache.set(cacheKey, moderator);
   return moderator;
 }

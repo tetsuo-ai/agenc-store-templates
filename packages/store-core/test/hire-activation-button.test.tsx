@@ -314,3 +314,195 @@ describe("HireActivationButton money safety (rendered)", () => {
     expect(h.onActivated).not.toHaveBeenCalled();
   });
 });
+
+/**
+ * §12 roster-trust rail — END-TO-END integration (review finding F1): the
+ * REAL button drives the REAL activation route handler wired with the REAL
+ * listing-trust resolver over a fake RPC. The store's own attestor holds NO
+ * record for this listing; a FOREIGN roster attestor's on-chain record is
+ * the only consumable one. The hire must name the FOREIGN moderator.
+ *
+ * Revert-sensitive both ways:
+ * - unwire the button (drop `listing` from fetchStoreHireModerator) → the
+ *   GET loses `?listing=` → the route answers listing-agnostically with the
+ *   store's own moderator → the FOREIGN assertion goes red;
+ * - unwire the route (drop `resolveListingHireModeration` from the handler)
+ *   → same red.
+ */
+describe("roster-trust rail end to end (button → route → resolver)", () => {
+  it("a cross-node hire names the FOREIGN roster attestor whose record actually exists", async () => {
+    const [
+      { createActivateJobSpecHandler, createMemoryJobSpecStore },
+      listingTrust,
+      sdk,
+      kit,
+    ] = await Promise.all([
+      import("../src/activation/server.js"),
+      import("../src/activation/listing-trust.js"),
+      import("@tetsuo-ai/marketplace-sdk"),
+      import("@solana/kit"),
+    ]);
+    const FOREIGN = String(
+      kit.getAddressDecoder().decode(new Uint8Array(32).fill(77)),
+    );
+    const SPEC_HASH = new Uint8Array(32).fill(7); // = the harness listing's specHash
+    const listingAccount = Uint8Array.from(
+      sdk.getServiceListingEncoder().encode({
+        providerAgent: String(
+          kit.getAddressDecoder().decode(new Uint8Array(32).fill(2)),
+        ) as never,
+        authority: String(
+          kit.getAddressDecoder().decode(new Uint8Array(32).fill(3)),
+        ) as never,
+        listingId: new Uint8Array(32),
+        name: new Uint8Array(64),
+        category: new Uint8Array(32),
+        tags: new Uint8Array(64),
+        specHash: SPEC_HASH,
+        specUri: "https://store.example.com/spec",
+        price: 5_000_000n,
+        priceMint: null,
+        requiredCapabilities: 0n,
+        defaultDeadlineSecs: 0n,
+        operator: String(
+          kit.getAddressDecoder().decode(new Uint8Array(32)),
+        ) as never,
+        operatorFeeBps: 0,
+        state: 0,
+        maxOpenJobs: 0,
+        openJobs: 0,
+        totalHires: 0n,
+        totalRating: 0n,
+        ratingCount: 0,
+        version: 1n,
+        createdAt: 1n,
+        updatedAt: 1n,
+        bump: 250,
+        reserved: new Uint8Array(64),
+      }),
+    );
+    const [foreignRecordPda] = await sdk.findListingModerationPda({
+      listing: LISTING as never,
+      jobSpecHash: SPEC_HASH,
+      moderator: FOREIGN as never,
+    });
+    const foreignRecord = Uint8Array.from(
+      sdk.getListingModerationEncoder().encode({
+        listing: LISTING as never,
+        providerAgent: String(
+          kit.getAddressDecoder().decode(new Uint8Array(32).fill(2)),
+        ) as never,
+        jobSpecHash: SPEC_HASH,
+        status: 0,
+        riskScore: 0,
+        categoryMask: 0n,
+        policyHash: new Uint8Array(32),
+        scannerHash: new Uint8Array(32),
+        recordedAt: 1n,
+        expiresAt: 0n,
+        moderator: FOREIGN as never,
+        bump: 254,
+        reserved: new Uint8Array(64),
+      }),
+    );
+    const accounts = new Map<string, Uint8Array>([
+      [LISTING, listingAccount],
+      [String(foreignRecordPda), foreignRecord],
+    ]);
+    const rpcAccount = (data: Uint8Array) => ({
+      data: [Buffer.from(data).toString("base64"), "base64"] as const,
+      executable: false,
+      lamports: 1_000_000n,
+      owner: sdk.AGENC_COORDINATION_PROGRAM_ADDRESS,
+      rentEpoch: 0n,
+      space: BigInt(data.length),
+    });
+    const fakeRpc = {
+      getAccountInfo: (addr: unknown) => ({
+        send: async () => {
+          const data = accounts.get(String(addr));
+          return { context: { slot: 0n }, value: data ? rpcAccount(data) : null };
+        },
+      }),
+      getMultipleAccounts: (addrs: readonly unknown[]) => ({
+        send: async () => ({
+          context: { slot: 0n },
+          value: addrs.map((a) => {
+            const data = accounts.get(String(a));
+            return data ? rpcAccount(data) : null;
+          }),
+        }),
+      }),
+      getProgramAccounts: () => ({
+        send: async () => ({ context: { slot: 0n }, value: [] }),
+      }),
+    } as never;
+
+    const resolver = listingTrust.createListingHireModerationResolver({
+      rpcUrl: "http://fake.invalid",
+      trustPolicy: "any-bonded-attestor",
+      resolveStoreModerators: async () => [MODERATOR], // own attestor: NO record
+      attestorEndpoint: null, // discovery-only — the record must be FOUND
+      rpc: fakeRpc,
+      roster: { active: [FOREIGN], exiting: new Set<string>() },
+      moderationConfig: {
+        exists: true,
+        moderationAuthority: null,
+        enabled: true,
+        updatedAt: BigInt(Math.floor(Date.now() / 1000)),
+        livenessWindowSecs: 0,
+      },
+    });
+    const hosting = createMemoryJobSpecStore({
+      publicBaseUrl: "http://store.local/api/agenc/job-specs",
+    });
+    // The template-shaped route: the handler wired exactly like
+    // templates/*/src/app/api/agenc/activate-job-spec/route.ts.
+    const routeHandler = createActivateJobSpecHandler({
+      storeJobSpec: hosting.storeJobSpec,
+      attestTaskModeration: async () => ({
+        attested: true,
+        moderator: MODERATOR,
+        moderation: { status: "CLEAN" },
+      }),
+      resolveHireModerator: async () => MODERATOR,
+      resolveListingHireModeration: resolver,
+      rateLimit: false,
+    });
+
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: RequestInfo | URL, init?: RequestInit) => {
+        const href = String(url);
+        if (!href.includes("/api/agenc/activate-job-spec")) {
+          return {
+            ok: true,
+            status: 200,
+            json: async () => ({
+              jsonrpc: "2.0",
+              id: 1,
+              error: { code: -32601, message: "rpc stubbed out" },
+            }),
+          } as never;
+        }
+        const absolute = href.startsWith("http")
+          ? href
+          : `http://store.local${href}`;
+        return routeHandler(new Request(absolute, init));
+      }),
+    );
+
+    const h = makeHarness();
+    render(h.ui);
+    await openAndConfirm();
+    await waitFor(() => expect(h.onActivated).toHaveBeenCalledTimes(1));
+
+    // THE rail assertion: the hire named the FOREIGN attestor whose record
+    // actually exists — not the store's own listing-agnostic moderator.
+    const hireArgs = h.hireFromListingHumanless.mock.calls[0]![0] as {
+      moderator: unknown;
+    };
+    expect(String(hireArgs.moderator)).toBe(FOREIGN);
+    expect(String(hireArgs.moderator)).not.toBe(MODERATOR);
+  });
+});

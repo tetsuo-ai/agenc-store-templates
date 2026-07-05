@@ -50,8 +50,51 @@ import {
   normalizeStoreJobSpec,
   type StoreJobSpecPayload,
 } from "./job-spec.js";
+import {
+  createListingHireModerationResolver,
+  ListingModerationBlockedError,
+  resolveListingTrustPolicy,
+  type ListingHireModeration,
+  type ListingTrustPolicy,
+} from "./listing-trust.js";
 import type { StoreConfig } from "../config/schema.js";
 import { detectEphemeralHosting } from "../config/go-live.js";
+
+// The LISTING-trust rail (roster policy + hire-time acquisition) lives in its
+// own module; re-exported here so `@tetsuo-ai/store-core/activation/server`
+// stays the single server-side entrypoint.
+export {
+  ACQUISITION_NEGATIVE_TTL_MS,
+  acquireListingAttestation,
+  bondedRosterModerators,
+  createListingHireModerationResolver,
+  DEFAULT_MODERATION_LIVENESS_WINDOW_SECS,
+  discoverListingModerationRecord,
+  EXPIRY_SAFETY_WINDOW_SECS,
+  fetchRosterAttestors,
+  isConsumableListingModeration,
+  isSpecHashBlocked,
+  LISTING_MODERATION_STATUS,
+  ListingModerationBlockedError,
+  listingsModerationUrl,
+  MAX_CONSUMABLE_RISK_SCORE,
+  MAX_ROSTER_ATTESTORS,
+  MODERATION_BLOCK_STATUS,
+  moderationConfigSnapshot,
+  moderationLivenessRelaxed,
+  resolveListingTrustPolicy,
+  RosterCapExceededError,
+  trustedListingModerators,
+  __clearListingTrustCachesForTests,
+  type DiscoveredListingRecord,
+  type ListingAcquisitionOutcome,
+  type ListingHireModeration,
+  type ListingHireModerationDeps,
+  type ListingTrustPolicy,
+  type ModerationConfigSnapshot,
+  type RosterAttestorEntry,
+  type RosterSnapshot,
+} from "./listing-trust.js";
 
 /**
  * The marketplace-managed task-moderation attestation endpoint used when no
@@ -492,10 +535,18 @@ export const DEFAULT_ACTIVATION_RATE_LIMIT: RateLimitOptions = {
   windowMs: 60_000,
 };
 
+/** Hard bound on distinct client-key windows the limiter tracks at once. */
+const RATE_LIMITER_MAX_KEYS = 10_000;
+
 /**
  * A small in-memory fixed-window rate limiter (per Node process — enough to
  * blunt drive-by griefing of a single store deploy; it is NOT a distributed
  * limiter). Returns `true` when the request is allowed.
+ *
+ * Memory-bounded: expired windows are pruned opportunistically, and past
+ * {@link RATE_LIMITER_MAX_KEYS} live keys the OLDEST windows are evicted —
+ * a client-key-rotation attack can therefore reset ITS OWN buckets but can
+ * never grow the map without bound.
  */
 export function createFixedWindowRateLimiter(
   options: RateLimitOptions,
@@ -503,10 +554,16 @@ export function createFixedWindowRateLimiter(
   const windows = new Map<string, { start: number; count: number }>();
   return function allow(key: string): boolean {
     const now = Date.now();
-    // Opportunistic prune so the map cannot grow unboundedly across windows.
-    if (windows.size > 10_000) {
+    if (windows.size >= RATE_LIMITER_MAX_KEYS) {
+      // Prune expired windows first; if rotation keeps the map full inside
+      // one window, evict oldest-inserted until back under the bound.
       for (const [k, w] of windows) {
         if (now - w.start >= options.windowMs) windows.delete(k);
+      }
+      while (windows.size >= RATE_LIMITER_MAX_KEYS) {
+        const oldest = windows.keys().next();
+        if (oldest.done) break;
+        windows.delete(oldest.value);
       }
     }
     const current = windows.get(key);
@@ -519,11 +576,34 @@ export function createFixedWindowRateLimiter(
   };
 }
 
-/** Best-effort client key for rate limiting (proxy headers, then a bucket). */
-function clientKeyOf(request: Request): string {
+/**
+ * Best-effort client key for rate limiting. Trust order matters — the
+ * listing GET leg can trigger a PAID acquisition, so the key must not be
+ * attacker-rotatable with one request header:
+ *
+ * 1. `x-real-ip` — SET (overwritten) by the platform proxy on the hosts the
+ *    templates deploy to (Vercel / Netlify / Cloudflare), so a client cannot
+ *    spoof it through them;
+ * 2. the RIGHTMOST `x-forwarded-for` entry — appended by the NEAREST
+ *    (trusted) proxy; the leftmost entries are client-supplied and are
+ *    deliberately ignored;
+ * 3. `"unknown"` — no proxy headers at all (direct exposure): all such
+ *    requests share one bucket, which throttles conservatively rather than
+ *    letting every request mint a fresh key.
+ *
+ * Deployments with a different proxy topology can override the whole
+ * function via {@link ActivateJobSpecHandlerDeps.clientKey}.
+ */
+export function clientKeyOf(request: Request): string {
+  const real = request.headers.get("x-real-ip")?.trim();
+  if (real) return real;
   const fwd = request.headers.get("x-forwarded-for");
-  if (fwd) return fwd.split(",")[0]!.trim();
-  return request.headers.get("x-real-ip") ?? "unknown";
+  if (fwd) {
+    const hops = fwd.split(",");
+    const nearest = hops[hops.length - 1]!.trim();
+    if (nearest) return nearest;
+  }
+  return "unknown";
 }
 
 // ------------------------------------------------------------ route handler
@@ -557,10 +637,28 @@ export interface ActivateJobSpecHandlerDeps {
    */
   resolveHireModerator?: (() => Promise<string>) | undefined;
   /**
+   * LISTING-scoped hire-moderator resolution (§12 roster-trust rail), served
+   * on `GET ?listing=<pda>`: policy-aware trusted-record discovery plus
+   * hire-time acquisition from the store's own attestation service.
+   * {@link resolveActivationBackend} wires
+   * {@link createListingHireModerationResolver}; omit to keep the legacy
+   * listing-agnostic GET only.
+   */
+  resolveListingHireModeration?:
+    | ((listing: string) => Promise<ListingHireModeration>)
+    | undefined;
+  /**
    * Per-client rate limit. Defaults to
    * {@link DEFAULT_ACTIVATION_RATE_LIMIT}; pass `false` to disable (tests).
    */
   rateLimit?: RateLimitOptions | false;
+  /**
+   * Client-key derivation for the rate limiter. Defaults to
+   * {@link clientKeyOf} (platform-set `x-real-ip`, else the rightmost —
+   * trusted-proxy-appended — `x-forwarded-for` hop, else one shared
+   * bucket). Override for deployments with a different proxy topology.
+   */
+  clientKey?: (request: Request) => string;
   /** Request-size bound. Defaults to {@link DEFAULT_MAX_REQUEST_BYTES}. */
   maxRequestBytes?: number;
   /** Canonical-JSON bound. Defaults to {@link DEFAULT_MAX_CANONICAL_BYTES}. */
@@ -618,7 +716,9 @@ export function createActivateJobSpecHandler({
   verifyTask,
   moderatorOverride,
   resolveHireModerator,
+  resolveListingHireModeration,
   rateLimit = DEFAULT_ACTIVATION_RATE_LIMIT,
+  clientKey = clientKeyOf,
   maxRequestBytes = DEFAULT_MAX_REQUEST_BYTES,
   maxCanonicalBytes = DEFAULT_MAX_CANONICAL_BYTES,
 }: ActivateJobSpecHandlerDeps): (request: Request) => Promise<Response> {
@@ -628,27 +728,85 @@ export function createActivateJobSpecHandler({
   return async function activateJobSpec(request: Request): Promise<Response> {
     // GET = the hire-moderator info leg (P1.2): the browser needs a moderator
     // pubkey for the hire gates BEFORE any attestation response exists.
-    if (request.method === "GET" && resolveHireModerator) {
-      try {
-        const moderator = await resolveHireModerator();
-        return json({ moderator });
-      } catch (cause) {
-        return json(
-          {
-            error:
-              cause instanceof Error
-                ? cause.message
-                : "Hire moderator could not be resolved.",
-          },
-          502,
-        );
+    //
+    // `?listing=<pda>` (roster-trust rail): resolve the moderator whose
+    // record ACTUALLY EXISTS and is trusted under the store's trust policy —
+    // acquiring a fresh attestation from the store's own service when none
+    // does. Fail-closed: BLOCKED → 422 `{ blocked: true }`, unresolvable →
+    // 502 — the browser never names a guessed moderator.
+    if (request.method === "GET") {
+      const listingParam = (() => {
+        try {
+          return new URL(request.url).searchParams.get("listing");
+        } catch {
+          return null;
+        }
+      })();
+      if (
+        listingParam &&
+        resolveListingHireModeration &&
+        !PDA_RE.test(listingParam)
+      ) {
+        // The client explicitly asked for LISTING-scoped resolution with a
+        // malformed PDA — answer honestly instead of silently falling back
+        // to the listing-agnostic moderator (which may have no record for
+        // the listing the client actually wants to hire from).
+        return json({ error: "listing must be a base58 listing PDA." }, 400);
+      }
+      if (
+        listingParam &&
+        resolveListingHireModeration &&
+        PDA_RE.test(listingParam)
+      ) {
+        if (allowRequest && !allowRequest(clientKey(request))) {
+          return json(
+            { error: "Too many activation requests; retry shortly." },
+            429,
+          );
+        }
+        try {
+          const resolved = await resolveListingHireModeration(listingParam);
+          return json({
+            moderator: resolved.moderator,
+            source: resolved.source,
+          });
+        } catch (cause) {
+          if (cause instanceof ListingModerationBlockedError) {
+            return json({ error: cause.message, blocked: true }, 422);
+          }
+          return json(
+            {
+              error:
+                cause instanceof Error
+                  ? cause.message
+                  : "Listing hire moderator could not be resolved.",
+            },
+            502,
+          );
+        }
+      }
+      if (resolveHireModerator) {
+        try {
+          const moderator = await resolveHireModerator();
+          return json({ moderator });
+        } catch (cause) {
+          return json(
+            {
+              error:
+                cause instanceof Error
+                  ? cause.message
+                  : "Hire moderator could not be resolved.",
+            },
+            502,
+          );
+        }
       }
     }
     if (request.method && request.method !== "POST") {
       return json({ error: "Method not allowed." }, 405);
     }
 
-    if (allowRequest && !allowRequest(clientKeyOf(request))) {
+    if (allowRequest && !allowRequest(clientKey(request))) {
       return json(
         { error: "Too many activation requests; retry shortly." },
         429,
@@ -821,6 +979,11 @@ export function createActivateJobSpecHandler({
 export interface ActivationEnv {
   /** RPC override (also used by the localnet sandbox attestor). */
   AGENC_RPC_URL?: string | undefined;
+  /**
+   * Deploy-env fallback for `moderation.trustPolicy` (§12 roster-trust rail).
+   * Exact value `any-bonded-attestor` only; the explicit config field wins.
+   */
+  AGENC_MODERATION_TRUST?: string | undefined;
   /** Bearer token for a PROTECTED custom attestor (sovereignty setups only). */
   AGENC_TASK_ATTESTOR_TOKEN?: string | undefined;
   /** agenc-protocol checkout override (localnet sandbox key discovery). */
@@ -858,6 +1021,21 @@ export interface ActivationBackend {
    * `GET /v1/info` (cached per process), else the localnet sandbox key.
    */
   resolveHireModerator: () => Promise<string>;
+  /**
+   * LISTING-scoped hire-moderator resolution (§12 roster-trust rail) for the
+   * route's `GET ?listing=<pda>` leg: policy-aware trusted-record discovery
+   * plus hire-time acquisition from the store's own attestation service
+   * ({@link createListingHireModerationResolver}). Fail-closed end to end.
+   */
+  resolveListingHireModeration: (
+    listing: string,
+  ) => Promise<ListingHireModeration>;
+  /**
+   * The effective LISTING trust policy (`moderation.trustPolicy` config, else
+   * the `AGENC_MODERATION_TRUST` env, else `edge-list`). Observability, not
+   * behavior — the resolver above already embeds it.
+   */
+  trustPolicy: ListingTrustPolicy;
   /** Where hosted specs are written (for the GET route). */
   jobSpecDirectory: string;
   /** Which attestor was resolved (observability, not behavior). */
@@ -1042,11 +1220,38 @@ export function resolveActivationBackend(
     return fetchAttestorModerator({ attestorEndpoint: attestorEndpointForInfo });
   };
 
+  // §12 roster-trust rail: the LISTING-scoped hire-moderator resolver served
+  // on `GET ?listing=<pda>`. The store's own moderator set is exactly what
+  // `resolveHireModerator` names today (override → localnet sandbox key →
+  // attestor /v1/info), resolved lazily and PROPAGATING failures — a
+  // transient /v1/info outage must never shrink the trusted set into an
+  // unnecessary paid acquisition. Acquisition is disabled on the localnet
+  // sandbox (its attestor signs directly; there is no HTTP listings service).
+  const trustPolicy = resolveListingTrustPolicy(
+    config.moderation?.trustPolicy,
+    env,
+  );
+  const acquisitionEndpoint =
+    config.network === "localnet" && !config.moderation?.attestorEndpoint
+      ? null
+      : attestorEndpointForInfo;
+  const resolveListingHireModeration = createListingHireModerationResolver({
+    rpcUrl: env.AGENC_RPC_URL ?? defaultRpcUrlForNetwork(config.network),
+    trustPolicy,
+    resolveStoreModerators: async () => [await resolveHireModerator()],
+    attestorEndpoint: acquisitionEndpoint,
+    // Catalog gate: the GET leg only resolves (and only ever ACQUIRES for)
+    // listings this store actually carries under its curation config.
+    curation: config.curation,
+  });
+
   const base = {
     storeJobSpec,
     verifyTask,
     moderatorOverride,
     resolveHireModerator,
+    resolveListingHireModeration,
+    trustPolicy,
     jobSpecDirectory,
     hosting,
     hostingIssue,
