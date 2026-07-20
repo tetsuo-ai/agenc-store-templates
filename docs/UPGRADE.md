@@ -53,6 +53,7 @@ The feed is `CHANGELOG.json` at the repo root, schema
 ```json
 {
   "schema": "agenc.store-changelog/v1",
+  "surfaceRevision": 5,
   "entries": [
     { "version": "0.1.0", "date": "2026-06-10", "summary": "…", "security": false }
   ]
@@ -60,7 +61,10 @@ The feed is `CHANGELOG.json` at the repo root, schema
 ```
 
 Entries are newest-first; the banner treats the first entry's `version` as
-current and any entry with `"security": true` as a security release.
+current, `surfaceRevision` as the current on-chain capability revision, and any
+entry with `"security": true` as a security release. The installed store-core
+reports the SDK surface revision it targets, so either a package-version lag or
+an on-chain revision lag raises the owner-visible banner.
 
 ## Verifying the upgrade story (CI)
 

@@ -227,7 +227,7 @@
   "x-deprecated-aliases": {
     "agenc.agent-card/v1": {
       "status": "deprecated",
-      "note": "Pre-unification store-core schema id (shape: {schema, pda, name, category?, tags?, description?, price:{sol,lamports,mint}, provider?, url, action}). Readers in @tetsuo-ai/store-core accept it on READ for one minor version (0.5.x) and up-convert to agenc.agentCard.v1; emitters always emit the unified id. Removal: store-core 0.6.0, per the deprecation conventions in agenc-protocol docs/VERSIONING.md."
+      "note": "Pre-unification store-core schema id (shape: {schema, pda, name, category?, tags?, description?, price:{sol,lamports,mint}, provider?, url, action}). Readers in @tetsuo-ai/store-core accept it on READ through 0.6.x and up-convert to agenc.agentCard.v1; emitters always emit the unified id. Removal: store-core 0.7.0, per the deprecation conventions in agenc-protocol docs/VERSIONING.md."
     }
   },
   "x-onchain-encoding": {

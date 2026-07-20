@@ -1,9 +1,9 @@
 /**
  * Instance staleness check (PLAN_2 C7). One-click deploys create forks no bot
- * updates. This compares a deployed store's pinned `store-core` version (and a
- * `surface_revision` placeholder for the P6.5 on-chain surface) against the
- * current values and reports whether the instance is behind — so a template can
- * render an OWNER-VISIBLE update banner, flagging security-relevant updates.
+ * updates. This compares a deployed store's pinned `store-core` version and
+ * target on-chain `surface_revision` against the current values and reports
+ * whether the instance is behind — so a template can render an OWNER-VISIBLE
+ * update banner, flagging security-relevant updates.
  *
  * Pure semver comparison; no network. The "current" side is supplied by the
  * changelog feed (see `./changelog.ts`) or pinned by the build.
@@ -11,6 +11,7 @@
  * @module upgrade/staleness
  */
 
+import { SURFACE_REVISION_CURRENT } from "@tetsuo-ai/marketplace-sdk";
 import packageJson from "../../package.json";
 
 /**
@@ -22,11 +23,11 @@ import packageJson from "../../package.json";
 export const STORE_CORE_VERSION: string = packageJson.version;
 
 /**
- * The on-chain surface revision this build targets. A PLACEHOLDER until P6.5
- * `getDeployedSurface` exposes a real `surface_revision`; compared verbatim so
- * the flip is a value change, not a code change.
+ * The on-chain surface revision this build targets. Sourced from the SDK's
+ * revision-5 capability model so the owner-visible update check cannot drift
+ * onto the old pre-P6.5 zero placeholder.
  */
-export const SURFACE_REVISION = 0;
+export const SURFACE_REVISION = SURFACE_REVISION_CURRENT;
 
 /** Parse a semver `major.minor.patch` (ignoring any prerelease) into a tuple. */
 function parseSemver(version: string): [number, number, number] | null {
@@ -62,7 +63,7 @@ export interface StalenessInput {
   currentStoreCoreVersion: string;
   /** The surface revision the store was built against. */
   installedSurfaceRevision?: number;
-  /** The current surface revision (P6.5 placeholder). */
+  /** The current surface revision advertised by the changelog feed. */
   currentSurfaceRevision?: number;
   /**
    * Versions (current side) that carry a security fix. If the installed version
@@ -79,6 +80,10 @@ export interface StalenessResult {
   storeCoreBehind: boolean;
   /** Whether the surface revision is behind. */
   surfaceBehind: boolean;
+  /** The on-chain surface revision this installed build targets. */
+  installedSurfaceRevision: number;
+  /** The current on-chain surface revision advertised by the release feed. */
+  currentSurfaceRevision: number;
   /** Whether a behind-version crosses a flagged security release. */
   security: boolean;
   /** The installed `store-core` version (echoed for the banner copy). */
@@ -93,7 +98,7 @@ export interface StalenessResult {
  * @param input - The installed-vs-current versions + revisions.
  * @returns A {@link StalenessResult}. `stale` is true when EITHER `store-core`
  *   or the surface revision is behind; `security` is true when a behind
- *   `store-core` version is at or below a flagged security release.
+ *   `store-core` version is below a flagged security release.
  */
 export function checkStaleness(input: StalenessInput): StalenessResult {
   const storeCoreBehind =
@@ -117,6 +122,8 @@ export function checkStaleness(input: StalenessInput): StalenessResult {
     stale: storeCoreBehind || surfaceBehind,
     storeCoreBehind,
     surfaceBehind,
+    installedSurfaceRevision: installedRev,
+    currentSurfaceRevision: currentRev,
     security,
     installedStoreCoreVersion: input.installedStoreCoreVersion,
     currentStoreCoreVersion: input.currentStoreCoreVersion,

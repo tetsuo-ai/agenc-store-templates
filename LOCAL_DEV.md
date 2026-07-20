@@ -1,14 +1,15 @@
 # Local development
 
-The two upstream `@tetsuo-ai` packages this repo consumes are **published to
-npm** and resolve from the registry with a plain `npm install`:
+The two upstream `@tetsuo-ai` packages this repo consumes are registry
+dependencies on the coordinated revision-5 release lines:
 
-- `@tetsuo-ai/marketplace-sdk` `^0.7.0`
-- `@tetsuo-ai/marketplace-react` `^0.3.0`
+- `@tetsuo-ai/marketplace-sdk` `^0.12.0`
+- `@tetsuo-ai/marketplace-react` `^0.4.2`
 
-(0.7.0/0.3.0 are the A1 cutover versions — sdk 0.6.x / react 0.2.x builds are
-rejected fail-closed by the mainnet program since the 2026-07-02 roster-gate
-upgrade.)
+Revision 5 is a flag-day wire change: pre-0.12 SDKs and pre-0.4.2 React clients
+must not be used after the program cutover. Until these exact versions are
+published as part of the coordinated release, validate with the packed-artifact
+workflow below; a clean registry install is a post-publication release gate.
 
 Never reintroduce `file:` overrides or `.local-tarballs/` pins for these — a
 root `overrides` block silently defeats every future pin bump and breaks
@@ -45,15 +46,15 @@ npm i /path/to/create-agenc-store-*.tgz
 npx create-agenc-store my-store --yes --referrer <base58>
 cd my-store
 npm install
-npm ls @tetsuo-ai/marketplace-sdk                # must show 0.7.0+ from the registry
+npm ls @tetsuo-ai/marketplace-sdk                # must show 0.12.x from the registry
 npm run typecheck && npm run build
 ```
 
-`@tetsuo-ai/store-core` is on npm, so a plain install in `my-store` resolves
-everything from the registry. When the release bumps store-core itself (its
-new version is not yet published), pack it too and co-install BOTH tarballs in
-ONE command at BOTH install points (the CLI host dir and the scaffolded
-store) — installing the CLI tarball alone then fails with ETARGET:
+After the coordinated release, a plain install in `my-store` resolves
+`@tetsuo-ai/store-core` from npm. While the staged store-core version is not yet
+published, pack it too and co-install BOTH tarballs in ONE command at BOTH
+install points (the CLI host dir and the scaffolded store) — installing the CLI
+tarball alone then fails with ETARGET:
 
 ```bash
 npm pack --workspace @tetsuo-ai/store-core

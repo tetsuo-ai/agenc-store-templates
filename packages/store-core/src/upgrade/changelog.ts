@@ -2,16 +2,20 @@
  * The changelog feed (PLAN_2 C7) — the update banner links to it, and the
  * staleness check's "current version" can be sourced from it. The feed is a
  * small JSON document published alongside the templates repo; the hook fetches
- * it and derives the latest version + whether a security release is newer than
- * the installed one.
+ * it and derives the latest package version, current on-chain surface revision,
+ * and whether a security release is newer than the installed one.
  *
- * SSR-safe: the hook makes no request at module scope and is disabled until a
- * feed URL is supplied.
+ * SSR-safe: the hook makes no request at module scope, and callers can disable
+ * the default feed request with `enabled: false`.
  *
  * @module upgrade/changelog
  */
 import { useQuery } from "@tanstack/react-query";
-import { checkStaleness, type StalenessResult } from "./staleness.js";
+import {
+  checkStaleness,
+  SURFACE_REVISION,
+  type StalenessResult,
+} from "./staleness.js";
 
 /** One changelog entry as published in the feed JSON. */
 export interface ChangelogEntry {
@@ -31,6 +35,8 @@ export interface ChangelogEntry {
 export interface ChangelogFeed {
   /** Schema marker. */
   schema: "agenc.store-changelog/v1";
+  /** Current on-chain capability revision for this release line. */
+  surfaceRevision: number;
   /** Entries, newest first. */
   entries: ChangelogEntry[];
 }
@@ -39,20 +45,51 @@ export interface ChangelogFeed {
 export const DEFAULT_CHANGELOG_FEED_URL =
   "https://raw.githubusercontent.com/tetsuo-ai/agenc-store-templates/main/CHANGELOG.json";
 
-/** Derive the latest (highest) version + security versions from a feed. */
+/** Derive the latest version, security versions, and surface revision. */
 export function summarizeFeed(feed: ChangelogFeed): {
   latestVersion: string | null;
   securityVersions: string[];
+  surfaceRevision: number;
 } {
   if (feed.entries.length === 0) {
-    return { latestVersion: null, securityVersions: [] };
+    return {
+      latestVersion: null,
+      securityVersions: [],
+      surfaceRevision: feed.surfaceRevision,
+    };
   }
   // Entries are newest-first by contract; the first is the latest.
   const latestVersion = feed.entries[0]?.version ?? null;
   const securityVersions = feed.entries
     .filter((entry) => entry.security)
     .map((entry) => entry.version);
-  return { latestVersion, securityVersions };
+  return {
+    latestVersion,
+    securityVersions,
+    surfaceRevision: feed.surfaceRevision,
+  };
+}
+
+/**
+ * Compare an installed store against one changelog feed snapshot.
+ *
+ * Kept separate from the React hook so the release-feed-to-staleness path is
+ * deterministic and directly testable.
+ */
+export function stalenessFromFeed(
+  installedVersion: string,
+  feed: ChangelogFeed,
+  installedSurfaceRevision = SURFACE_REVISION,
+): StalenessResult | null {
+  const summary = summarizeFeed(feed);
+  if (!summary.latestVersion) return null;
+  return checkStaleness({
+    installedStoreCoreVersion: installedVersion,
+    currentStoreCoreVersion: summary.latestVersion,
+    installedSurfaceRevision,
+    currentSurfaceRevision: summary.surfaceRevision,
+    securityVersions: summary.securityVersions,
+  });
 }
 
 /** Options for {@link useChangelogFeed}. */
@@ -120,12 +157,8 @@ export function useChangelogFeed(
   const latestVersion = summary?.latestVersion ?? null;
 
   let staleness: StalenessResult | null = null;
-  if (options?.installedVersion && latestVersion) {
-    staleness = checkStaleness({
-      installedStoreCoreVersion: options.installedVersion,
-      currentStoreCoreVersion: latestVersion,
-      securityVersions: summary?.securityVersions,
-    });
+  if (options?.installedVersion && feed) {
+    staleness = stalenessFromFeed(options.installedVersion, feed);
   }
 
   return {

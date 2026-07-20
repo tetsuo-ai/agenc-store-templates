@@ -170,8 +170,9 @@ describe("sitemap + robots", () => {
 
 describe("AgentCard + llms.txt", () => {
   // WP-B1 (revert-sensitive): the AgentCard schema is UNIFIED with agenc.ag's
-  // production route ("agenc.agentCard.v1"). The pre-unification
-  // "agenc.agent-card/v1" shape must be gone.
+  // production route ("agenc.agentCard.v1"). Emitters must never produce the
+  // pre-unification "agenc.agent-card/v1" shape; parseAgentCard retains its
+  // explicitly deprecated read-only bridge through store-core 0.6.x.
   it("emits the unified agenc.agentCard.v1 card", () => {
     const card = listingAgentCard(listing, store, { referrerFeeBps: 250 });
     expect(card.schema).toBe("agenc.agentCard.v1");

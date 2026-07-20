@@ -1,8 +1,8 @@
 /**
  * The CLIENT half of the hire→activation seam (WP-B1).
  *
- * `useHumanlessHireFlow` (marketplace-react 0.2.x) chains
- * `hire → hostAndModerateJobSpec → setTaskJobSpec` and refuses to sign the
+ * `useHumanlessHireFlow` from the supported marketplace-react release line
+ * chains `hire → hostAndModerateJobSpec → setTaskJobSpec` and refuses to sign the
  * activation unless the host returned `moderationAttested: true` with a
  * 32-byte hash and a non-empty URI. This module builds that host: a plain
  * `fetch` POST to the store's own same-origin activation route

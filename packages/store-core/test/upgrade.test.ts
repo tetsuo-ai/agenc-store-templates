@@ -6,7 +6,9 @@ import { describe, it, expect } from "vitest";
 import {
   checkStaleness,
   compareSemver,
+  stalenessFromFeed,
   summarizeFeed,
+  SURFACE_REVISION,
   type ChangelogFeed,
 } from "../src/upgrade/index.js";
 
@@ -38,6 +40,8 @@ describe("checkStaleness", () => {
       currentStoreCoreVersion: "0.2.0",
     });
     expect(result.stale).toBe(false);
+    expect(result.installedSurfaceRevision).toBe(5);
+    expect(result.currentSurfaceRevision).toBe(5);
   });
 
   it("flags a surface-revision lag as stale", () => {
@@ -49,6 +53,8 @@ describe("checkStaleness", () => {
     });
     expect(result.stale).toBe(true);
     expect(result.surfaceBehind).toBe(true);
+    expect(result.installedSurfaceRevision).toBe(0);
+    expect(result.currentSurfaceRevision).toBe(1);
   });
 
   it("marks security when a behind version crosses a flagged security release", () => {
@@ -75,6 +81,7 @@ describe("summarizeFeed", () => {
   it("derives the latest version + security versions (newest-first contract)", () => {
     const feed: ChangelogFeed = {
       schema: "agenc.store-changelog/v1",
+      surfaceRevision: 5,
       entries: [
         { version: "0.3.0", date: "2026-06-10", summary: "latest" },
         { version: "0.2.0", date: "2026-06-01", summary: "sec", security: true },
@@ -84,15 +91,59 @@ describe("summarizeFeed", () => {
     const summary = summarizeFeed(feed);
     expect(summary.latestVersion).toBe("0.3.0");
     expect(summary.securityVersions).toEqual(["0.2.0"]);
+    expect(summary.surfaceRevision).toBe(5);
   });
 
   it("handles an empty feed", () => {
     const summary = summarizeFeed({
       schema: "agenc.store-changelog/v1",
+      surfaceRevision: 5,
       entries: [],
     });
     expect(summary.latestVersion).toBeNull();
     expect(summary.securityVersions).toEqual([]);
+    expect(summary.surfaceRevision).toBe(5);
+  });
+
+  it("carries revision 5 from the feed into the staleness result", () => {
+    const feed: ChangelogFeed = {
+      schema: "agenc.store-changelog/v1",
+      surfaceRevision: 5,
+      entries: [
+        { version: "0.6.1", date: "2026-07-19", summary: "current" },
+      ],
+    };
+
+    const current = stalenessFromFeed("0.6.1", feed);
+    expect(SURFACE_REVISION).toBe(5);
+    expect(current).toMatchObject({
+      stale: false,
+      surfaceBehind: false,
+      installedSurfaceRevision: 5,
+      currentSurfaceRevision: 5,
+    });
+
+    const revisionFour = stalenessFromFeed("0.6.1", feed, 4);
+    expect(revisionFour).toMatchObject({
+      stale: true,
+      storeCoreBehind: false,
+      surfaceBehind: true,
+      installedSurfaceRevision: 4,
+      currentSurfaceRevision: 5,
+    });
+
+    const publishedFeed = JSON.parse(
+      readFileSync(
+        fileURLToPath(new URL("../../../CHANGELOG.json", import.meta.url)),
+        "utf8",
+      ),
+    ) as ChangelogFeed;
+    expect(publishedFeed.surfaceRevision).toBe(5);
+    expect(stalenessFromFeed("0.6.1", publishedFeed)).toMatchObject({
+      stale: false,
+      installedSurfaceRevision: 5,
+      currentSurfaceRevision: 5,
+    });
   });
 });
 

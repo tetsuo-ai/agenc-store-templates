@@ -98,7 +98,9 @@ operators running their own attestor.
 ### `upgrade` — instance-upgrade primitives (C7)
 
 `checkStaleness`, `useChangelogFeed`, and `<UpdateBanner>` (owner-visible;
-security updates flagged).
+security updates flagged). The release feed carries `surfaceRevision: 5`, and
+the installed build reports the matching SDK target, so a future on-chain
+surface bump is visible even when the store-core semver has not changed.
 
 ### `@tetsuo-ai/store-core/sandbox-up`
 

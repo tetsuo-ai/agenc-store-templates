@@ -20,6 +20,7 @@ export {
 export {
   useChangelogFeed,
   summarizeFeed,
+  stalenessFromFeed,
   DEFAULT_CHANGELOG_FEED_URL,
   type ChangelogEntry,
   type ChangelogFeed,
