@@ -22,7 +22,7 @@ Target: **< 15 minutes** on a clean machine.
 
 1. **Recruit** a participant who has **not** seen this repo. (This recruitment +
    the run itself is the [HUMAN] step.)
-2. **Clean machine**: Node ≥ 20.18, no prior AgenC tooling, no cached configs.
+2. **Clean machine**: Node ≥ 22.23.1, no prior AgenC tooling, no cached configs.
 3. **Clock start**: the participant opens a template README (or runs
    `npx create-agenc-store`).
 4. The participant follows ONLY the README + CLI prompts:

@@ -22,7 +22,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: "20.18"
+          node-version: "22.23.1"
       # The AgenC packages are not yet on npm; CI installs the committed tarballs
       # via the root `overrides`. `npm ci` requires the lockfile to be in sync.
       - run: npm ci
@@ -42,7 +42,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: "20.18"
+          node-version: "22.23.1"
       - run: npm ci
       # Boot the local sandbox (requires AGENC_PROTOCOL_DIR or a sibling
       # ../agenc-protocol checkout with a built program + SDK).
