@@ -29,7 +29,12 @@ const SKIP_ENTRIES = new Set([
   ".turbo",
   "dist",
   "out",
+  "coverage",
 ]);
+
+function isBuildArtifact(name: string): boolean {
+  return SKIP_ENTRIES.has(name) || name.endsWith(".tsbuildinfo");
+}
 
 async function exists(p: string): Promise<boolean> {
   try {
@@ -74,7 +79,7 @@ async function copyTemplate(srcDir: string, destDir: string): Promise<void> {
   await mkdir(destDir, { recursive: true });
   const entries = await readdir(srcDir, { withFileTypes: true });
   for (const entry of entries) {
-    if (SKIP_ENTRIES.has(entry.name)) continue;
+    if (isBuildArtifact(entry.name)) continue;
     const from = path.join(srcDir, entry.name);
     const to = path.join(destDir, entry.name);
     if (entry.isDirectory()) {

@@ -27,20 +27,17 @@ import { fileURLToPath } from "node:url";
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
 // ---------------------------------------------------------------------------
-// SUPPORT MATRIX — as of 2026-07-03 (P1.2 hardened open roster, 90-ix surface,
-// 9/14/13 moderation gates). Keep in lockstep with agenc-protocol
+// SUPPORT MATRIX — revision-5 coordinated cutover. Keep in lockstep with agenc-protocol
 // docs/VERSIONING.md §1.1. Update this constant ALONGSIDE any lockstep
 // republish + pin bump.
 // ---------------------------------------------------------------------------
 const SUPPORT_MATRIX = {
-  "@tetsuo-ai/marketplace-sdk": { min: "0.8.0", maxExclusive: "0.9.0" },
-  "@tetsuo-ai/marketplace-react": { min: "0.4.0", maxExclusive: "0.5.0" },
-  "@tetsuo-ai/marketplace-tools": { min: "0.4.0", maxExclusive: "0.5.0" },
-  "@tetsuo-ai/marketplace-mcp": { min: "0.4.0", maxExclusive: "0.5.0" },
-  "@tetsuo-ai/marketplace-moderation": { min: "0.1.0", maxExclusive: "0.2.0" },
-  // 0.6.0 (roster-trust rail) is ADDITIVE on the same program wire as 0.5.x —
-  // both minors stay in-matrix until a wire change retires 0.5.x.
-  "@tetsuo-ai/store-core": { min: "0.5.0", maxExclusive: "0.7.0" },
+  "@tetsuo-ai/marketplace-sdk": { min: "0.12.0", maxExclusive: "0.13.0" },
+  "@tetsuo-ai/marketplace-react": { min: "0.4.2", maxExclusive: "0.5.0" },
+  "@tetsuo-ai/marketplace-tools": { min: "0.5.0", maxExclusive: "0.6.0" },
+  "@tetsuo-ai/marketplace-mcp": { min: "0.5.0", maxExclusive: "0.6.0" },
+  "@tetsuo-ai/marketplace-moderation": { min: "0.2.0", maxExclusive: "0.3.0" },
+  "@tetsuo-ai/store-core": { min: "0.6.1", maxExclusive: "0.7.0" },
 };
 
 const DEP_SECTIONS = [
@@ -162,4 +159,4 @@ if (checked === 0) {
   process.exit(1);
 }
 
-console.log(`check:pins OK — ${checked} @tetsuo-ai pin(s) inside the support matrix (sdk >=0.8 <0.9, react/tools/mcp >=0.4 <0.5, store-core >=0.5 <0.7).`);
+console.log(`check:pins OK — ${checked} @tetsuo-ai pin(s) inside the revision-5 support matrix (sdk >=0.12 <0.13, react >=0.4.2 <0.5, tools/mcp >=0.5 <0.6, store-core >=0.6.1 <0.7).`);

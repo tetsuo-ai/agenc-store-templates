@@ -15,9 +15,9 @@
     "@solana/kit": "^6.9.0",
     "@solana/program-client-core": "^6.4.0",
     "@tanstack/react-query": "^5.62.0",
-    "@tetsuo-ai/marketplace-react": "^0.4.0",
-    "@tetsuo-ai/marketplace-sdk": "^0.8.0",
-    "@tetsuo-ai/store-core": "^0.6.0",
+    "@tetsuo-ai/marketplace-react": "^0.4.2",
+    "@tetsuo-ai/marketplace-sdk": "^0.12.0",
+    "@tetsuo-ai/store-core": "^0.6.1",
     "client-only": "^0.0.1",
     "next": "15.5.19",
     "react": "19.1.0",
@@ -31,6 +31,9 @@
     "@types/react-dom": "^19.0.2",
     "tailwindcss": "^4.0.0",
     "typescript": "^5.9.3"
+  },
+  "overrides": {
+    "postcss": "^8.5.10"
   },
   "engines": {
     "node": ">=20.18.0"

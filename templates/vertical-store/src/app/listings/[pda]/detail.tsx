@@ -57,6 +57,7 @@ export function ListingDetail({ pda }: { pda: string }) {
         // P1.2 `moderator` (whose listing attestation the hire gate consumes)
         // is auto-resolved from the store's activation route.
         listing: listing.address,
+        providerAgent: listing.account.providerAgent,
         taskId: randomTaskId(),
         // Compare-and-swap guards derived from the decoded listing so a price /
         // version change between page load and confirm fails safely on-chain.

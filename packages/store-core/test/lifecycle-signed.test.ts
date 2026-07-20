@@ -130,6 +130,7 @@ describe("signed store lifecycle (litesvm, real program)", () => {
       const taskId = new Uint8Array(32).fill(44);
       await buyerClient.hireFromListingHumanless({
         listing: listingPda,
+        providerAgent,
         creator: buyer,
         taskId,
         expectedPrice: PRICE,
@@ -240,6 +241,7 @@ describe("signed store lifecycle (litesvm, real program)", () => {
         task: taskPda,
         worker: providerAgent,
         authority: provider,
+        jobSpecHash: moderation.jobSpecHash,
       });
       await providerClient.submitTaskResult({
         task: taskPda,

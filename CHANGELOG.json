@@ -2,6 +2,13 @@
   "schema": "agenc.store-changelog/v1",
   "entries": [
     {
+      "version": "0.6.1",
+      "date": "2026-07-19",
+      "summary": "Revision-5 coordinated client cutover: require marketplace SDK ^0.12.0 and React ^0.4.2, widen store-core's peers to the hardened wire, scaffold only the revision-5-compatible package set, and force patched PostCSS 8.5.x across generated Next.js stores. This is a flag-day compatibility release; older transaction builders fail closed after the program upgrade.",
+      "security": true,
+      "url": "https://github.com/tetsuo-ai/agenc-store-templates/releases/tag/v0.6.1"
+    },
+    {
       "version": "0.6.0",
       "date": "2026-07-04",
       "summary": "store-core: §12 roster-trust consumption rail — new OPT-IN moderation.trustPolicy config (\"edge-list\" default = today's exact behavior; \"any-bonded-attestor\" = a consumable ListingModeration record by ANY registered, non-exiting on-chain roster ModerationAttestor makes a listing hireable here, so cross-node supply attested by another marketplace's attestor is hireable without re-attestation). Wired END-TO-END: HireActivationButton resolves the hire moderator per-listing (GET ?listing=<pda>), all three template activation routes pass the resolver, and resolveActivationBackend builds it with zero configuration. The resolver mirrors the program's full hire-gate pipeline: the §5.2 moderation-block floor (unconditional, never relaxed — a blocked hash never resolves and never pays for an acquisition), the record checks (status CLEAN/HUMAN_APPROVED, risk bound, unexpired — a record that merely EXISTS is never named), the global moderation authority as a first-class candidate (incl. all legacy records), per-hit unlockability (author = authority or a live non-exiting roster entry), and the P1.3 liveness deadman / disabled gate (relaxed → listing-agnostic moderator, no acquisition). Hardened: own-set discovery runs before any roster read and a roster over MAX_ROSTER_ATTESTORS=512 degrades (own records keep hiring, acquisition disabled, loud warning) instead of 502ing the network; acquisition is single-flighted per listing with a short negative-result TTL and gated on the store's own catalog/curation; the rate-limiter key is no longer first-hop-XFF spoofable and the limiter map is memory-bounded. Transient RPC errors propagate and never trigger a paid acquisition. Additive; the on-chain gates remain the enforcement point. NOTE: the legacy agenc.agent-card/v1 read-compat removal previously slated for 0.6.0 is deferred to 0.7.0 (this release keeps the read path).",

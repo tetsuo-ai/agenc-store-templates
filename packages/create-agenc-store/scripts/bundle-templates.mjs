@@ -23,7 +23,19 @@ const REPO_TEMPLATES = path.resolve(PKG_DIR, "../../templates");
 const DEST_TEMPLATES = path.join(PKG_DIR, "templates");
 
 const VARIANTS = ["marketplace-store", "provider-storefront", "vertical-store"];
-const SKIP = new Set(["node_modules", ".next", "next-env.d.ts", "dist", "out", ".turbo"]);
+const SKIP = new Set([
+  "node_modules",
+  ".next",
+  "next-env.d.ts",
+  "dist",
+  "out",
+  ".turbo",
+  "coverage",
+]);
+
+function isBuildArtifact(name) {
+  return SKIP.has(name) || name.endsWith(".tsbuildinfo");
+}
 
 async function exists(p) {
   try {
@@ -37,7 +49,7 @@ async function exists(p) {
 async function copyTree(src, dest) {
   await mkdir(dest, { recursive: true });
   for (const entry of await readdir(src, { withFileTypes: true })) {
-    if (SKIP.has(entry.name)) continue;
+    if (isBuildArtifact(entry.name)) continue;
     const from = path.join(src, entry.name);
     const to = path.join(dest, entry.name);
     if (entry.isDirectory()) await copyTree(from, to);

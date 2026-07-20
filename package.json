@@ -20,10 +20,11 @@
   "engines": {
     "node": ">=20.18.0"
   },
-  "comment:overrides": "@tetsuo-ai/marketplace-sdk and -react resolve from the npm registry (sdk 0.8.x / react 0.4.x — see `npm run check:pins` for the enforced support matrix) — never from local tarballs. The remaining overrides only dedupe the React type packages across the Next 15 templates.",
+  "comment:overrides": "@tetsuo-ai/marketplace-sdk and -react resolve from the npm registry (sdk 0.12.x / react >=0.4.2 <0.5 — see `npm run check:pins`) — never from local tarballs. The other overrides dedupe React types and enforce the patched PostCSS floor across Next templates.",
   "overrides": {
     "@types/react": "19.2.17",
-    "@types/react-dom": "19.2.3"
+    "@types/react-dom": "19.2.3",
+    "postcss": "^8.5.10"
   },
   "license": "MIT",
   "author": "Tetsuo AI"

@@ -225,6 +225,7 @@ describe.each(["marketplace-store", "provider-storefront", "vertical-store"] as 
       for (const rel of REQUIRED_FILES) {
         expect(await exists(path.join(target, rel)), `missing ${rel}`).toBe(true);
       }
+      expect(await exists(path.join(target, "tsconfig.tsbuildinfo"))).toBe(false);
 
       // The generated config carries the deployer's values.
       const config = await readFile(path.join(target, "agenc.config.ts"), "utf8");
