@@ -19,12 +19,19 @@ jobs:
     name: Packages — typecheck + tests
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: "22.23.1"
-      # The AgenC packages are not yet on npm; CI installs the committed tarballs
-      # via the root `overrides`. `npm ci` requires the lockfile to be in sync.
+          cache: npm
+      - name: Pin declared npm toolchain
+        run: npm install --global npm@11.18.0 && npm --version | grep -Fx 11.18.0
+      # Candidate dependency versions are registry-bound. During a coordinated
+      # flag-day release this job becomes installable immediately after the
+      # prerequisite protocol packages publish; local prerelease validation
+      # uses the independently reproduced tarballs with the same lock SRIs.
       - run: npm ci
       - run: npm run typecheck --workspace=packages/store-core --workspace=packages/create-agenc-store
       - run: npm test --workspace=packages/store-core --workspace=packages/create-agenc-store
@@ -39,10 +46,15 @@ jobs:
     # that stack; otherwise the package gate above is the enforced contract.
     if: ${{ vars.RUN_TEMPLATE_BUILDS == 'true' }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: "22.23.1"
+          cache: npm
+      - name: Pin declared npm toolchain
+        run: npm install --global npm@11.18.0 && npm --version | grep -Fx 11.18.0
       - run: npm ci
       # Boot the local sandbox (requires AGENC_PROTOCOL_DIR or a sibling
       # ../agenc-protocol checkout with a built program + SDK).

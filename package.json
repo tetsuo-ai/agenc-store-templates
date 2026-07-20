@@ -2,6 +2,7 @@
   "name": "agenc-store-templates",
   "version": "0.0.0",
   "private": true,
+  "packageManager": "npm@11.18.0",
   "description": "Deploy-your-own AgenC agent store: config-first Next.js templates + the shared store-core package (PLAN_2 Part C).",
   "type": "module",
   "workspaces": [
@@ -18,9 +19,15 @@
     "sandbox:env": "node packages/store-core/scripts/sandbox-up.mjs env"
   },
   "engines": {
-    "node": ">=22.23.1"
+    "node": ">=22.23.1",
+    "npm": "11.18.0"
+  },
+  "allowScripts": {
+    "esbuild@0.28.1": true,
+    "sharp@0.34.5": true
   },
   "devDependencies": {
+    "esbuild": "0.28.1",
     "litesvm": "1.1.0"
   },
   "comment:overrides": "@tetsuo-ai/marketplace-sdk and -react resolve from the npm registry (sdk 0.12.x / react >=0.4.2 <0.5 — see `npm run check:pins`) — never from local tarballs. The other overrides dedupe React types, keep the local validator on the Node-22-compatible LiteSVM line, and enforce the patched PostCSS floor across Next templates.",
@@ -28,7 +35,10 @@
     "@types/react": "19.2.17",
     "@types/react-dom": "19.2.3",
     "litesvm": "1.1.0",
-    "postcss": "^8.5.10"
+    "postcss": "^8.5.10",
+    "tsup": {
+      "esbuild": "^0.28.1"
+    }
   },
   "license": "MIT",
   "author": "Tetsuo AI"
