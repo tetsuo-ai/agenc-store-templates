@@ -33,9 +33,11 @@ jobs:
       # prerequisite protocol packages publish; local prerelease validation
       # uses the independently reproduced tarballs with the same lock SRIs.
       - run: npm ci
+      - name: Build store-core before dependent workspace checks
+        run: npm run build --workspace=packages/store-core
       - run: npm run typecheck --workspace=packages/store-core --workspace=packages/create-agenc-store
       - run: npm test --workspace=packages/store-core --workspace=packages/create-agenc-store
-      - run: npm run build --workspace=packages/store-core --workspace=packages/create-agenc-store
+      - run: npm run build --workspace=packages/create-agenc-store
 
   template-build:
     name: Templates — next build against the sandbox
@@ -56,6 +58,8 @@ jobs:
       - name: Pin declared npm toolchain
         run: npm install --global npm@11.18.0 && npm --version | grep -Fx 11.18.0
       - run: npm ci
+      - name: Build store-core before template builds
+        run: npm run build --workspace=packages/store-core
       # Boot the local sandbox (requires AGENC_PROTOCOL_DIR or a sibling
       # ../agenc-protocol checkout with a built program + SDK).
       - run: npm run sandbox:up
