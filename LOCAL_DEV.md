@@ -7,9 +7,10 @@ dependencies on the coordinated revision-5 release lines:
 - `@tetsuo-ai/marketplace-react` `^0.5.0`
 
 Revision 5 is a flag-day wire change: pre-0.12 SDKs and pre-0.5 React clients
-must not be used after the program cutover. Until these exact versions are
-published as part of the coordinated release, validate with the packed-artifact
-workflow below; a clean registry install is a post-publication release gate.
+must not be used after the program cutover. These exact versions are published
+on npm as part of the coordinated revision-5 release (deployed to mainnet
+2026-07-22), so a clean registry install is the normal path; the packed-artifact
+workflow below remains for validating not-yet-published builds.
 
 Never reintroduce `file:` overrides or `.local-tarballs/` pins for these — a
 root `overrides` block silently defeats every future pin bump and breaks
@@ -52,10 +53,10 @@ npm run typecheck && npm run build
 ```
 
 After the coordinated release, a plain install in `my-store` resolves
-`@tetsuo-ai/store-core` from npm. While the staged store-core version is not yet
-published, pack it too and co-install BOTH tarballs in ONE command at BOTH
-install points (the CLI host dir and the scaffolded store) — installing the CLI
-tarball alone then fails with ETARGET:
+`@tetsuo-ai/store-core` from npm — the published revision-5 path. If you are
+validating an unpublished store-core build instead, pack it too and co-install
+BOTH tarballs in ONE command at BOTH install points (the CLI host dir and the
+scaffolded store) — installing the CLI tarball alone then fails with ETARGET:
 
 ```bash
 npm pack --workspace @tetsuo-ai/store-core
