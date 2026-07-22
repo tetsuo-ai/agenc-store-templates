@@ -5,7 +5,8 @@
  * job spec (`set_task_job_spec`) behind a CLEAN task-moderation attestation.
  * This button drives `useHumanlessHireFlow` end to end:
  *
- *   hire (escrow funded, CreatorReview pinned)
+ *   derive + commit the exact task-bound job-spec hash
+ *     → hire (escrow funded, CreatorReview pinned)
  *     → host + attest the job spec (the store's own activation route —
  *       marketplace-managed attestation, zero moderation config)
  *     → set_task_job_spec (the task becomes claimable).
@@ -39,6 +40,7 @@ import {
   type ReactElement,
 } from "react";
 import { address } from "@solana/kit";
+import { findTaskPda, values } from "@tetsuo-ai/marketplace-sdk";
 import {
   Button,
   HireCheckoutModal,
@@ -60,6 +62,7 @@ import {
   createStoreActivationHost,
   DEFAULT_ACTIVATION_ROUTE,
   fetchStoreHireModerator,
+  normalizeStoreJobSpec,
   type StoreJobSpecDraft,
 } from "../activation/index.js";
 import { TaskActivationRepair } from "./TaskActivationRepair.js";
@@ -71,7 +74,10 @@ import { TaskActivationRepair } from "./TaskActivationRepair.js";
  * or the attestation service's `/v1/info`, cached per session) before hiring —
  * the hire gate consumes the listing attestation recorded by that moderator.
  */
-export type StoreHireInput = Omit<HumanlessHireFlowHireInput, "moderator"> & {
+export type StoreHireInput = Omit<
+  HumanlessHireFlowHireInput,
+  "moderator" | "taskJobSpecHash"
+> & {
   /** Explicit P1.2 moderator override; auto-resolved when omitted. */
   moderator?: HumanlessHireFlowHireInput["moderator"];
 };
@@ -190,7 +196,7 @@ export function HireActivationButton({
 }: HireActivationButtonProps): ReactElement {
   const ctx = useAgencContext();
   const flow = useHumanlessHireFlow<StoreJobSpecDraft>();
-  const { connected } = useWalletSigner();
+  const { connected, signer } = useWalletSigner();
   const [open, setOpen] = useState(false);
   // Synchronous re-entrancy latch: a fast double-confirm would mint two funded
   // hires with fresh taskIds (two escrows). Same defense HireButton carries.
@@ -389,8 +395,32 @@ export function HireActivationButton({
       lastModeratorRef.current = null;
       const hireInput = buildHireInput(listing);
       const jobSpec = (buildJobSpec ?? defaultJobSpec)(listing);
+      if (!signer) {
+        setRetryHostError(
+          new Error("Connect the buyer wallet before funding this hire."),
+        );
+        return;
+      }
+      const taskId = Uint8Array.from(
+        hireInput.taskId as ArrayLike<number>,
+      );
+      const [taskPda] = await findTaskPda({
+        creator: signer.address,
+        taskId,
+      });
+      // Revision 5 binds the buyer's exact task contract at funding time. The
+      // activation route later normalizes and hashes this same payload, so a
+      // compromised or drifting host cannot substitute another job spec after
+      // escrow is funded.
+      const taskContract = await values.canonicalJobSpecHash(
+        normalizeStoreJobSpec(
+          String(taskPda),
+          String(listing.address),
+          jobSpec,
+        ),
+      );
       attemptRef.current = {
-        taskId: Uint8Array.from(hireInput.taskId as ArrayLike<number>),
+        taskId,
         jobSpec,
       };
       // P1.2: the hire gate names the moderator whose LISTING attestation it
@@ -428,8 +458,13 @@ export function HireActivationButton({
         endpoint: activationEndpoint,
       });
       const result = await flow.hireAndActivate({
-        hire: { ...hireInput, moderator: hireModerator },
+        hire: {
+          ...hireInput,
+          moderator: hireModerator,
+          taskJobSpecHash: taskContract.bytes,
+        },
         jobSpec,
+        creator: signer,
         hostAndModerateJobSpec: async (input) => {
           const moderation = await host(input);
           lastModeratorRef.current = moderation.moderator;
@@ -466,6 +501,7 @@ export function HireActivationButton({
     onActivated,
     onHired,
     retryActivation,
+    signer,
   ]);
 
   const buttonLabel =

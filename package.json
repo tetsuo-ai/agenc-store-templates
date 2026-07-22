@@ -30,7 +30,7 @@
     "esbuild": "0.28.1",
     "litesvm": "1.1.0"
   },
-  "comment:overrides": "@tetsuo-ai/marketplace-sdk and -react resolve from the npm registry (sdk 0.12.x / react >=0.4.2 <0.5 — see `npm run check:pins`) — never from local tarballs. The other overrides dedupe React types, keep the local validator on the Node-22-compatible LiteSVM line, and enforce the patched PostCSS floor across Next templates.",
+  "comment:overrides": "@tetsuo-ai/marketplace-sdk and -react resolve from the npm registry (sdk 0.12.x / react 0.5.x — see `npm run check:pins`) — never from local tarballs. The other overrides dedupe React types, keep the local validator on the Node-22-compatible LiteSVM line, and enforce the patched PostCSS floor across Next templates.",
   "overrides": {
     "@types/react": "19.2.17",
     "@types/react-dom": "19.2.3",

@@ -5,7 +5,7 @@
     {
       "version": "0.6.1",
       "date": "2026-07-19",
-      "summary": "Revision-5 coordinated client cutover: require marketplace SDK ^0.12.0 and React ^0.4.2, widen store-core's peers to the hardened wire, scaffold only the revision-5-compatible package set, publish surfaceRevision 5 through the upgrade feed, and force patched PostCSS 8.5.x across generated Next.js stores. This is a flag-day compatibility release; older transaction builders fail closed after the program upgrade.",
+      "summary": "Revision-5 coordinated client cutover: require marketplace SDK ^0.12.0 and React ^0.5.0, bind the exact normalized per-task job-spec hash in every funded hire before the activation host is contacted, widen store-core's peers to the hardened wire, scaffold only the revision-5-compatible package set, publish surfaceRevision 5 through the upgrade feed, and force patched PostCSS 8.5.x across generated Next.js stores. This is a flag-day compatibility release; older transaction builders fail closed after the program upgrade.",
       "security": true,
       "url": "https://github.com/tetsuo-ai/agenc-store-templates/releases/tag/v0.6.1"
     },

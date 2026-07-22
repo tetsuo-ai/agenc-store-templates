@@ -77,9 +77,13 @@ templates differ only in routing + curation.
 
 ### `activation` — the hire→activation seam (WP-B1)
 
-A hire mints a Task that workers CANNOT claim until the creator pins its job
-spec (`set_task_job_spec`) behind a CLEAN task-moderation attestation. The
-templates chain that automatically via `useHumanlessHireFlow`:
+A revision-5 hire commits the exact normalized, task-bound job-spec hash while
+funding escrow. Workers CANNOT claim until the creator publishes the matching
+URI/hash account (`set_task_job_spec`) behind a CLEAN task-moderation
+attestation. `HireActivationButton` derives the future Task PDA and contract
+hash before the wallet funds anything; the activation host must reproduce that
+same hash. The templates chain the remaining work automatically via
+`useHumanlessHireFlow`:
 
 - `@tetsuo-ai/store-core/activation` (client-safe): `buildListingJobSpec`,
   `normalizeStoreJobSpec`, and `createStoreActivationHost` — the

@@ -4,9 +4,9 @@ The two upstream `@tetsuo-ai` packages this repo consumes are registry
 dependencies on the coordinated revision-5 release lines:
 
 - `@tetsuo-ai/marketplace-sdk` `^0.12.0`
-- `@tetsuo-ai/marketplace-react` `^0.4.2`
+- `@tetsuo-ai/marketplace-react` `^0.5.0`
 
-Revision 5 is a flag-day wire change: pre-0.12 SDKs and pre-0.4.2 React clients
+Revision 5 is a flag-day wire change: pre-0.12 SDKs and pre-0.5 React clients
 must not be used after the program cutover. Until these exact versions are
 published as part of the coordinated release, validate with the packed-artifact
 workflow below; a clean registry install is a post-publication release gate.
@@ -47,6 +47,7 @@ npx create-agenc-store my-store --yes --referrer <base58>
 cd my-store
 npm install
 npm ls @tetsuo-ai/marketplace-sdk                # must show 0.12.x from the registry
+npm ls @tetsuo-ai/marketplace-react              # must show 0.5.x from the registry
 npm run typecheck && npm run build
 ```
 

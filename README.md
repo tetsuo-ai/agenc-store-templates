@@ -58,13 +58,17 @@ full instruction surface). `store-core` + `marketplace-react`:
 
 ## Hire → activation (WP-B1)
 
-A hire mints a Task that workers cannot claim until its job spec is pinned
-on-chain (`set_task_job_spec`) behind a CLEAN task-moderation attestation. The
-templates chain that automatically: `useHumanlessHireFlow` → the store's own
-`/api/agenc/activate-job-spec` route (hosts the canonical job-spec JSON, gets
-the marketplace-managed attestation — **zero moderation configuration**) → the
-buyer signs the activation. Operators running their own attestor may set the
-optional sovereignty field `moderation.attestorEndpoint`.
+A revision-5 hire commits the exact per-task job-spec hash while funding the
+escrow, and workers still cannot claim until the matching URI/hash account is
+published on-chain (`set_task_job_spec`) behind a CLEAN task-moderation
+attestation. Before any money moves, `HireActivationButton` derives the future
+Task PDA, normalizes the draft, and hashes the complete task-bound payload. The
+templates then continue automatically: `useHumanlessHireFlow` → the store's
+own `/api/agenc/activate-job-spec` route (which must reproduce that committed
+hash, hosts the canonical JSON, and gets the marketplace-managed attestation —
+**zero moderation configuration**) → the buyer signs activation. Operators
+running their own attestor may set the optional sovereignty field
+`moderation.attestorEndpoint`.
 
 ## Quick start (local)
 
