@@ -20,16 +20,21 @@
  */
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { address } from "@solana/kit";
-import { findTaskPda } from "@tetsuo-ai/marketplace-sdk";
+import { address, getBase58Decoder } from "@solana/kit";
+import { findTaskPda, values } from "@tetsuo-ai/marketplace-sdk";
 import { AgencProvider } from "@tetsuo-ai/marketplace-react";
 import type { AgencProviderConfig } from "@tetsuo-ai/marketplace-react";
+import { normalizeStoreJobSpec } from "../src/activation/job-spec.js";
 import { HireActivationButton } from "../src/sections/HireActivationButton.js";
 import type { HireLandedContext } from "../src/sections/HireActivationButton.js";
 
 const BUYER = "8iC21EoERDWSXRc5AH8fQBaV32pMSsAN3P7jumi15pH6";
 const LISTING = "7RkbpXC7sPVNYSLVkaxChHgXNa4J8B4kgBhzRZzjTkHc";
-const HASH_HEX = "ab".repeat(32);
+// The revision-5 SDK orchestration validates that wire signatures are
+// canonical 64-byte base58 strings (an ambiguous token must never trigger a
+// second funded hire) — mocks must return real-shaped signatures.
+const HIRE_SIG = getBase58Decoder().decode(new Uint8Array(64).fill(7));
+const ACTIVATION_SIG = getBase58Decoder().decode(new Uint8Array(64).fill(9));
 /** The P1.2 moderator the stubbed store route names. */
 const MODERATOR = "13tuj7ELwtHmeR22kvaSaa2pKqSscyoHtQBF65aHuo6v";
 
@@ -92,12 +97,24 @@ function stubActivationRoute(
           json: async () => ({ error: "attestor down" }),
         };
       }
+      const request = JSON.parse(String(init?.body ?? "null")) as {
+        taskPda: string;
+        listing: string;
+        jobSpec: unknown;
+      };
+      const { hex: jobSpecHashHex } = await values.canonicalJobSpecHash(
+        normalizeStoreJobSpec(
+          request.taskPda,
+          request.listing,
+          request.jobSpec,
+        ),
+      );
       return {
         ok: true,
         status: 200,
         json: async () => ({
-          jobSpecHashHex: HASH_HEX,
-          jobSpecUri: `https://store.example.com/api/agenc/job-specs/${HASH_HEX}`,
+          jobSpecHashHex,
+          jobSpecUri: `https://store.example.com/api/agenc/job-specs/${jobSpecHashHex}`,
           moderationAttested: true,
           ...(options.omitModerator ? {} : { moderator: MODERATOR }),
           moderation: { status: "CLEAN" },
@@ -116,10 +133,10 @@ function makeHarness() {
   const activationEndpoint = `/api/agenc/activate-job-spec?h=${++harnessCount}`;
   const signer = { address: address(BUYER) };
   const hireFromListingHumanless = vi.fn(
-    async (..._args: unknown[]) => ({ signature: "hire-sig" }),
+    async (..._args: unknown[]) => ({ signature: HIRE_SIG }),
   );
   const setTaskJobSpec = vi.fn(async (..._args: unknown[]) => ({
-    signature: "activation-sig",
+    signature: ACTIVATION_SIG,
   }));
   const client = {
     signer,
@@ -206,7 +223,7 @@ describe("HireActivationButton money safety (rendered)", () => {
     const context = h.onHired.mock.calls[0]![1];
     expect(context.listing).toBe(LISTING);
     expect(context.taskIdHex).toBe("15".repeat(32)); // 0x15 = 21
-    expect(context.hireSignature).toBe("hire-sig");
+    expect(context.hireSignature).toBe(HIRE_SIG);
     expect(context.jobSpec?.title).toContain("Test Analyst");
     expect(h.onActivated).not.toHaveBeenCalled();
   });
@@ -235,11 +252,11 @@ describe("HireActivationButton money safety (rendered)", () => {
     expect(h.setTaskJobSpec).toHaveBeenCalledTimes(1);
     const activationArgs = h.setTaskJobSpec.mock.calls[0]![0] as unknown as {
       task: unknown;
+      jobSpecHash: Uint8Array;
       jobSpecUri: string;
       moderator: unknown;
     };
     expect(String(activationArgs.task)).toBe(pda);
-    expect(activationArgs.jobSpecUri).toContain(HASH_HEX);
     // …naming the P1.2 moderator whose attestation record it consumes…
     expect(String(activationArgs.moderator)).toBe(MODERATOR);
     // …and NO second hire was built or sent (a fresh taskId = a second escrow).
@@ -249,10 +266,15 @@ describe("HireActivationButton money safety (rendered)", () => {
     // consumes that moderator's LISTING attestation).
     const hireArgs = h.hireFromListingHumanless.mock.calls[0]![0] as {
       moderator: unknown;
+      taskJobSpecHash: Uint8Array;
     };
     expect(String(hireArgs.moderator)).toBe(MODERATOR);
+    expect(activationArgs.jobSpecHash).toEqual(hireArgs.taskJobSpecHash);
+    expect(activationArgs.jobSpecUri).toContain(
+      values.bytesToHex(hireArgs.taskJobSpecHash),
+    );
     expect(h.onActivated.mock.calls[0]![0]).toMatchObject({
-      activationSignature: "activation-sig",
+      activationSignature: ACTIVATION_SIG,
     });
   });
 
@@ -355,7 +377,7 @@ describe("roster-trust rail end to end (button → route → resolver)", () => {
           kit.getAddressDecoder().decode(new Uint8Array(32).fill(3)),
         ) as never,
         listingId: new Uint8Array(32),
-        name: new Uint8Array(64),
+        name: new Uint8Array(32),
         category: new Uint8Array(32),
         tags: new Uint8Array(64),
         specHash: SPEC_HASH,
@@ -378,7 +400,7 @@ describe("roster-trust rail end to end (button → route → resolver)", () => {
         createdAt: 1n,
         updatedAt: 1n,
         bump: 250,
-        reserved: new Uint8Array(64),
+        reserved: new Uint8Array(32),
       }),
     );
     const [foreignRecordPda] = await sdk.findListingModerationPda({
@@ -402,7 +424,7 @@ describe("roster-trust rail end to end (button → route → resolver)", () => {
         expiresAt: 0n,
         moderator: FOREIGN as never,
         bump: 254,
-        reserved: new Uint8Array(64),
+        reserved: new Uint8Array(7),
       }),
     );
     const accounts = new Map<string, Uint8Array>([

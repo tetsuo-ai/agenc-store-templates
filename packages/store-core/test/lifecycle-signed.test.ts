@@ -39,6 +39,7 @@ import { defineStore, listingOperatorTerms } from "../src/config/index.js";
 import {
   buildListingJobSpec,
   createStoreActivationHost,
+  normalizeStoreJobSpec,
 } from "../src/activation/index.js";
 import {
   createActivateJobSpecHandler,
@@ -128,6 +129,22 @@ describe("signed store lifecycle (litesvm, real program)", () => {
       buyer = await market.fundedSigner();
       const buyerClient = market.clientFor(buyer);
       const taskId = new Uint8Array(32).fill(44);
+      const [taskPda] = await findTaskPda({
+        creator: buyer.address,
+        taskId,
+      });
+      const jobSpec = buildListingJobSpec({
+        listingName: "Lifecycle Analyst",
+        specUri: "https://store.example.com/spec",
+        brief: "Turn my CSV into a weekly report.",
+      });
+      const taskContract = await values.canonicalJobSpecHash(
+        normalizeStoreJobSpec(
+          String(taskPda),
+          String(listingPda),
+          jobSpec,
+        ),
+      );
       await buyerClient.hireFromListingHumanless({
         listing: listingPda,
         providerAgent,
@@ -137,6 +154,7 @@ describe("signed store lifecycle (litesvm, real program)", () => {
         expectedVersion: 1n,
         reviewWindowSecs: 3600n,
         listingSpecHash: SPEC_HASH,
+        taskJobSpecHash: taskContract.bytes,
         // P1.2: the hire gate names the moderator whose LISTING attestation
         // it consumes — here the sandbox moderation authority that recorded
         // the CLEAN attestation above (what the store sources from the
@@ -147,10 +165,6 @@ describe("signed store lifecycle (litesvm, real program)", () => {
         // resolveReferrerCapability().live is true.
         referrer: address(storeConfig.referrer.wallet),
         referrerFeeBps: storeConfig.referrer.feeBps,
-      });
-      const [taskPda] = await findTaskPda({
-        creator: buyer.address,
-        taskId,
       });
       const [escrowPda] = await findEscrowPda({ task: taskPda });
       expect(market.svm.getAccount(escrowPda)?.exists).toBe(true); // escrow funded
@@ -199,16 +213,13 @@ describe("signed store lifecycle (litesvm, real program)", () => {
         taskPda: String(taskPda),
         taskId,
         listing: String(listingPda),
-        jobSpec: buildListingJobSpec({
-          listingName: "Lifecycle Analyst",
-          specUri: "https://store.example.com/spec",
-          brief: "Turn my CSV into a weekly report.",
-        }),
+        jobSpec,
         hireSignature: "test-hire-signature",
         referrerInjected: true,
       });
       expect(moderation.moderationAttested).toBe(true);
       expect(moderation.jobSpecHash).toHaveLength(32);
+      expect(moderation.jobSpecHash).toEqual(taskContract.bytes);
       // P1.2: the host surfaces the moderator whose record the activation
       // consumes — exactly the signer of the attestation above.
       expect(moderation.moderator).toBe(String(market.moderator.address));

@@ -26,6 +26,7 @@ import { safeDefineStore } from "@tetsuo-ai/store-core/config";
 import {
   buildListingJobSpec,
   createStoreActivationHost,
+  normalizeStoreJobSpec,
   STORE_JOB_SPEC_SCHEMA,
 } from "@tetsuo-ai/store-core/activation";
 import {
@@ -129,6 +130,10 @@ describe("fake lifecycle: scaffold-config → listing → hire → activation-ca
     expect(hireInput).not.toHaveProperty("creator");
     expect(hireInput).not.toHaveProperty("referrer");
     expect(hireInput).not.toHaveProperty("referrerFeeBps");
+    // The connected store button derives this from the exact future Task PDA
+    // and normalized draft; a template caller cannot accidentally bind a
+    // listing hash or another task's contract here.
+    expect(hireInput).not.toHaveProperty("taskJobSpecHash");
 
     // The task PDA the flow derives after the (mocked) hire.
     const [taskPda] = await findTaskPda({
@@ -159,14 +164,22 @@ describe("fake lifecycle: scaffold-config → listing → hire → activation-ca
         handler(new Request(url, init))) as typeof fetch,
     });
 
+    const jobSpec = buildListingJobSpec({
+      listingName: "Fake Analyst",
+      brief: "Do the thing.",
+    });
+    const fundedTaskContract = await values.canonicalJobSpecHash(
+      normalizeStoreJobSpec(
+        String(taskPda),
+        listing.address,
+        jobSpec,
+      ),
+    );
     const result = await host({
       taskPda: String(taskPda),
       taskId: hireInput.taskId,
       listing: listing.address,
-      jobSpec: buildListingJobSpec({
-        listingName: "Fake Analyst",
-        brief: "Do the thing.",
-      }),
+      jobSpec,
       hireSignature: "fake-signature",
       referrerInjected: true,
     });
@@ -175,6 +188,7 @@ describe("fake lifecycle: scaffold-config → listing → hire → activation-ca
     expect(result.moderationAttested).toBe(true);
     expect(result.jobSpecHash).toBeInstanceOf(Uint8Array);
     expect(result.jobSpecHash).toHaveLength(32);
+    expect(result.jobSpecHash).toEqual(fundedTaskContract.bytes);
     // P1.2: the moderator whose record the activation names — sourced from
     // the attestation response, never guessed.
     expect(result.moderator).toBe(MODERATOR);

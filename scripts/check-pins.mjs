@@ -33,7 +33,7 @@ const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..
 // ---------------------------------------------------------------------------
 const SUPPORT_MATRIX = {
   "@tetsuo-ai/marketplace-sdk": { min: "0.12.0", maxExclusive: "0.13.0" },
-  "@tetsuo-ai/marketplace-react": { min: "0.4.2", maxExclusive: "0.5.0" },
+  "@tetsuo-ai/marketplace-react": { min: "0.5.0", maxExclusive: "0.6.0" },
   "@tetsuo-ai/marketplace-tools": { min: "0.5.0", maxExclusive: "0.6.0" },
   "@tetsuo-ai/marketplace-mcp": { min: "0.5.0", maxExclusive: "0.6.0" },
   "@tetsuo-ai/marketplace-moderation": { min: "0.2.0", maxExclusive: "0.3.0" },
@@ -159,4 +159,4 @@ if (checked === 0) {
   process.exit(1);
 }
 
-console.log(`check:pins OK — ${checked} @tetsuo-ai pin(s) inside the revision-5 support matrix (sdk >=0.12 <0.13, react >=0.4.2 <0.5, tools/mcp >=0.5 <0.6, store-core >=0.6.1 <0.7).`);
+console.log(`check:pins OK — ${checked} @tetsuo-ai pin(s) inside the revision-5 support matrix (sdk >=0.12 <0.13, react >=0.5 <0.6, tools/mcp >=0.5 <0.6, store-core >=0.6.1 <0.7).`);

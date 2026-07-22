@@ -1,6 +1,6 @@
 {
   "name": "@tetsuo-ai/store-core",
-  "version": "0.6.1",
+  "version": "0.6.2",
   "description": "Shared config schema, SEO helpers, page sections, and the local sandbox bootstrap consumed by every AgenC store template (PLAN_2 Part C).",
   "type": "module",
   "main": "./dist/index.cjs",
@@ -81,7 +81,7 @@
   "peerDependencies": {
     "@solana/kit": "^6.9.0",
     "@solana/program-client-core": "^6.4.0",
-    "@tetsuo-ai/marketplace-react": "^0.4.2",
+    "@tetsuo-ai/marketplace-react": "^0.5.0",
     "@tetsuo-ai/marketplace-sdk": "^0.12.0",
     "react": ">=18"
   },
@@ -94,7 +94,7 @@
     "@solana/program-client-core": "^6.4.0",
     "@testing-library/dom": "^10.4.1",
     "@testing-library/react": "^16.3.2",
-    "@tetsuo-ai/marketplace-react": "^0.4.2",
+    "@tetsuo-ai/marketplace-react": "^0.5.0",
     "@tetsuo-ai/marketplace-sdk": "^0.12.0",
     "@types/react": "^18.3.12",
     "jsdom": "^26.1.0",

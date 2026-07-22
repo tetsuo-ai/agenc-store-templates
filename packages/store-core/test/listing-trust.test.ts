@@ -88,7 +88,7 @@ function encodeModeration(input: {
       expiresAt: input.expiresAt ?? 0n,
       moderator: input.moderator as never,
       bump: 254,
-      reserved: new Uint8Array(64),
+      reserved: new Uint8Array(7),
     }),
   );
 }
@@ -105,7 +105,7 @@ function encodeListing(
       providerAgent: addrOf(2) as never,
       authority: addrOf(3) as never,
       listingId: new Uint8Array(32),
-      name: new Uint8Array(64),
+      name: new Uint8Array(32),
       category,
       tags: new Uint8Array(64),
       specHash: SPEC_HASH,
@@ -126,7 +126,7 @@ function encodeListing(
       createdAt: 1n,
       updatedAt: 1n,
       bump: 250,
-      reserved: new Uint8Array(64),
+      reserved: new Uint8Array(32),
     }),
   );
 }
